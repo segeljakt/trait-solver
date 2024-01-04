@@ -13,6 +13,8 @@ pub fn solve(
     rules: &[Rule],
     ctx: &mut Context,
 ) -> Option<Vec<(Name, Type)>> {
+    // Should we accept previous solutions as new rules? Maybe we don't need it, since we can
+    // arrive at those solutions again.
     let mut solutions = vec![];
     for rule in rules {
         let rule = instantiate(rule, ctx);
@@ -33,25 +35,11 @@ pub fn solve(
     }
 }
 
-fn matches(s: Vec<(Name, Type)>, i0: &Impl, i1: &Impl) -> Option<Vec<(Name, Type)>> {
-    if i0.name == i1.name && i0.types.len() == i1.types.len() {
-        i1.types
-            .iter()
-            .zip(i0.types.iter())
-            .try_fold(s, |s, (t0, t1)| unify(s, &t0, &t1))
-    } else {
-        None
-    }
-}
-
 fn instantiate(rule: &Rule, ctx: &mut Context) -> Rule {
     let s = rule
         .quantifiers
         .iter()
-        .map(|q| {
-            let t = ctx.new_tyvar();
-            (q.clone(), t)
-        })
+        .map(|q| (q.clone(), ctx.new_tyvar()))
         .collect::<Vec<_>>();
 
     let head = apply_impl(&s, &rule.head);
@@ -64,15 +52,40 @@ fn instantiate(rule: &Rule, ctx: &mut Context) -> Rule {
     Rule::new(vec![], head, body)
 }
 
-fn apply_impl(s: &[(Name, Type)], i: &Impl) -> Impl {
-    let types = i.types.iter().map(|t| apply(s, t)).collect();
-    Impl::new(i.name.clone(), types)
+// Checks if i0 and i1 match, and if so, returns a substitution.
+fn matches(s0: Vec<(Name, Type)>, i0: &Impl, i1: &Impl) -> Option<Vec<(Name, Type)>> {
+    if i0.name == i1.name && i0.types.len() == i1.types.len() {
+        let s1 = i1
+            .types
+            .iter()
+            .zip(i0.types.iter())
+            .try_fold(s0, |s, (t0, t1)| unify(s, &t0, &t1))?;
+        let s2 = i1
+            .assocs
+            .iter()
+            .zip(i0.assocs.iter())
+            .try_fold(s1, |s, ((_, t0), (_, t1))| unify(s, &t0, &t1))?;
+        Some(s2)
+    } else {
+        None
+    }
 }
 
-fn apply(s: &[(Name, Type)], t: &Type) -> Type {
+// Applies a substitution to all types in an impl.
+fn apply_impl(s: &[(Name, Type)], i: &Impl) -> Impl {
+    let types = i.types.iter().map(|t| apply_type(s, t)).collect();
+    let assocs = i
+        .assocs
+        .iter()
+        .map(|(x, t)| (x.clone(), apply_type(s, t)))
+        .collect();
+    Impl::new(i.name.clone(), types, assocs)
+}
+
+fn apply_type(s: &[(Name, Type)], t: &Type) -> Type {
     match t {
         Type::Cons(x, ts) => {
-            let ts = ts.iter().map(|t| apply(s, t)).collect::<Vec<_>>();
+            let ts = ts.iter().map(|t| apply_type(s, t)).collect::<Vec<_>>();
             Type::Cons(x.clone(), ts)
         }
         Type::Var(x) => {
@@ -82,12 +95,16 @@ fn apply(s: &[(Name, Type)], t: &Type) -> Type {
                 Type::Var(x.clone())
             }
         }
+        Type::Assoc(i, x) => {
+            let i = apply_impl(s, i);
+            Type::Assoc(i, x.clone())
+        }
     }
 }
 
 pub fn unify(s0: Vec<(Name, Type)>, t0: &Type, t1: &Type) -> Option<Vec<(Name, Type)>> {
-    let t0 = apply(&s0, t0);
-    let t1 = apply(&s0, t1);
+    let t0 = apply_type(&s0, t0);
+    let t1 = apply_type(&s0, t1);
     let s1 = mgu(&t0, &t1)?;
     let s2 = compose(s0, s1);
     Some(s2)
@@ -95,7 +112,7 @@ pub fn unify(s0: Vec<(Name, Type)>, t0: &Type, t1: &Type) -> Option<Vec<(Name, T
 
 fn compose(s0: Vec<(Name, Type)>, s1: Vec<(Name, Type)>) -> Vec<(Name, Type)> {
     s1.into_iter()
-        .map(|(x, t)| (x, apply(&s0, &t)))
+        .map(|(x, t)| (x, apply_type(&s0, &t)))
         .chain(s0.clone())
         .collect()
 }
@@ -114,6 +131,13 @@ fn mgu(t0: &Type, t1: &Type) -> Option<Vec<(Name, Type)>> {
                 None
             }
         }
-        (t, Type::Var(x)) | (Type::Var(x), t) => Some(vec![(x.clone(), t.clone())]),
+        (t1, Type::Assoc(i, x)) | (Type::Assoc(i, x), t1) => {
+            if let Some((_, t2)) = i.assocs.iter().find(|(n, _)| n == x) {
+                mgu(t1, t2)
+            } else {
+                None
+            }
+        }
+        (t1, Type::Var(x)) | (Type::Var(x), t1) => Some(vec![(x.clone(), t1.clone())]),
     }
 }

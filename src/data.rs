@@ -16,11 +16,13 @@ pub struct Rule {
 pub struct Impl {
     pub name: Name,
     pub types: Vec<Type>,
+    pub assocs: Vec<(Name, Type)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     Cons(Name, Vec<Type>),
+    Assoc(Impl, Name),
     Var(Name),
 }
 
@@ -35,35 +37,44 @@ impl Context {
 
     pub fn new_tyvar(&mut self) -> Type {
         self.tvars += 1;
-        Type::Var(format!("T{}", self.tvars))
+        Type::Var(format!("?T{}", self.tvars))
     }
 }
 
 impl Impl {
-    pub fn new(name: impl Into<Name>, types: Vec<Type>) -> Impl {
+    pub fn new(name: impl Into<Name>, types: Vec<Type>, assocs: Vec<(Name, Type)>) -> Impl {
         Impl {
             name: name.into(),
             types,
+            assocs,
         }
     }
 }
 
 impl Type {
-    pub fn cons(name: impl Into<Name>, args: Vec<Type>) -> Type {
-        Type::Cons(name.into(), args)
+    pub fn cons(x: impl Into<Name>, ts: Vec<Type>) -> Type {
+        Type::Cons(x.into(), ts)
     }
 
-    pub fn var(name: impl Into<Name>) -> Type {
-        Type::Var(name.into())
+    pub fn var(x: impl Into<Name>) -> Type {
+        Type::Var(x.into())
     }
 
-    pub fn atom(name: impl Into<Name>) -> Type {
-        Type::Cons(name.into(), Vec::new())
+    pub fn atom(x: impl Into<Name>) -> Type {
+        Type::Cons(x.into(), Vec::new())
+    }
+
+    pub fn assoc(i: Impl, x: impl Into<Name>) -> Type {
+        Type::Assoc(i, x.into())
     }
 }
 
 impl Rule {
     pub fn new(quantifiers: Vec<Name>, head: Impl, body: Vec<Impl>) -> Rule {
-        Rule { quantifiers, body, head }
+        Rule {
+            quantifiers,
+            body,
+            head,
+        }
     }
 }

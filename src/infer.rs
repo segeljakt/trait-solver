@@ -1,17 +1,94 @@
-use crate::data::Binding;
 use crate::data::CompilerError;
-use crate::data::Context;
-use crate::data::Def;
+use crate::data::StmtDef;
 use crate::data::Expr;
-use crate::data::Impl;
+use crate::data::StmtImpl;
 use crate::data::Name;
-use crate::data::Pred;
+use crate::data::Trait;
 use crate::data::Program;
 use crate::data::Stmt;
 use crate::data::Type;
-use crate::data::Var;
+use crate::data::StmtVar;
 use crate::solve;
 use crate::unify;
+
+pub struct Context {
+    tvars: usize,
+    stack: Vec<Scope>,
+    pub errors: Vec<CompilerError>,
+}
+
+pub struct Scope {
+    impls: Vec<StmtImpl>,
+    binds: Vec<(Name, Binding)>,
+}
+
+impl Scope {
+    pub fn new() -> Scope {
+        Scope {
+            impls: vec![],
+            binds: vec![],
+        }
+    }
+}
+
+// pub struct Goal {}
+
+// pub struct ImplDef {
+//     generics: Vec<Name>,
+//     def: Def,
+//     imp: Pred,
+// }
+
+#[derive(Debug, Clone)]
+pub enum Binding {
+    Var(Type),
+    Def(Vec<Name>, Vec<Trait>, Vec<Type>, Type),
+    Impl(StmtImpl),
+}
+
+impl Context {
+    pub fn new() -> Context {
+        Context {
+            tvars: 0,
+            stack: vec![Scope::new()],
+            errors: vec![],
+        }
+    }
+
+    pub fn recover<T>(&mut self, r: Result<T, CompilerError>) {
+        if let Err(e) = r {
+            self.errors.push(e);
+        }
+    }
+
+    pub fn new_tyvar(&mut self) -> Type {
+        self.tvars += 1;
+        Type::Var(format!("?T{}", self.tvars - 1))
+    }
+
+    pub fn get(&self, x1: &str) -> Option<&Binding> {
+        self.stack
+            .iter()
+            .rev()
+            .find_map(|s| s.binds.iter().find(|(x0, _)| x0 == x1).map(|(_, b)| b))
+    }
+
+    pub fn bind(&mut self, name: Name, b: Binding) {
+        self.stack.last_mut().unwrap().binds.push((name, b));
+    }
+
+    pub fn add_impl(&mut self, i: StmtImpl) {
+        self.stack.last_mut().unwrap().impls.push(i);
+    }
+
+    pub fn impls(&self) -> Vec<StmtImpl> {
+        self.stack
+            .iter()
+            .rev()
+            .flat_map(|s| s.impls.clone())
+            .collect()
+    }
+}
 
 impl Program {
     pub fn infer(&self) -> Result<Program, Vec<CompilerError>> {
@@ -44,7 +121,7 @@ impl Stmt {
     pub fn infer(
         &self,
         sub: &mut Vec<(Name, Type)>,
-        goals: &mut Vec<Pred>,
+        goals: &mut Vec<Trait>,
         ctx: &mut Context,
     ) -> Stmt {
         match self {
@@ -55,26 +132,28 @@ impl Stmt {
                 let e = e.infer(sub, goals, ctx);
                 Stmt::Expr(e)
             }
+            Stmt::Struct(_) => todo!(),
+            Stmt::Enum(_) => todo!(),
         }
     }
 }
 
-impl Var {
+impl StmtVar {
     pub fn infer(
         &self,
         sub: &mut Vec<(Name, Type)>,
-        goals: &mut Vec<Pred>,
+        goals: &mut Vec<Trait>,
         ctx: &mut Context,
-    ) -> Var {
+    ) -> StmtVar {
         let e = self.expr.infer(sub, goals, ctx);
         ctx.recover(unify(sub, &self.ty, e.type_of()));
         ctx.bind(self.name.clone(), Binding::Var(self.ty.clone()));
-        Var::new(self.name.clone(), self.ty.clone(), e)
+        StmtVar::new(self.name.clone(), self.ty.clone(), e)
     }
 }
 
-impl Impl {
-    pub fn infer(&self, _ctx: &mut Context) -> Impl {
+impl StmtImpl {
+    pub fn infer(&self, _ctx: &mut Context) -> StmtImpl {
         // ctx.add_impl(self.clone());
         // for d in ds {
         //     // let impl_def = ImplDef
@@ -86,8 +165,8 @@ impl Impl {
     }
 }
 
-impl Def {
-    pub fn infer(&self, ctx: &mut Context) -> Def {
+impl StmtDef {
+    pub fn infer(&self, ctx: &mut Context) -> StmtDef {
         let mut sub = vec![];
         let mut goals = vec![];
         for p in &self.params {
@@ -121,28 +200,48 @@ impl Expr {
     pub fn infer(
         &self,
         sub: &mut Vec<(Name, Type)>,
-        goals: &mut Vec<Pred>,
+        goals: &mut Vec<Trait>,
         ctx: &mut Context,
     ) -> Expr {
         match self {
             Expr::Int(t0, v) => {
-                let t1 = Type::Cons("i32".to_string(), vec![]);
+                let t1 = Type::atom("i32".to_string());
                 let v = v.clone();
                 ctx.recover(unify(sub, &t0, &t1));
                 Expr::Int(t0.clone(), v)
             }
             Expr::Float(t0, v) => {
-                let t1 = Type::Cons("f32".to_string(), vec![]);
+                let t1 = Type::atom("f32".to_string());
                 let v = v.clone();
                 ctx.recover(unify(sub, &t0, &t1));
                 Expr::Float(t0.clone(), v)
             }
             Expr::Bool(t0, v) => {
-                let t1 = Type::Cons("bool".to_string(), vec![]);
+                let t1 = Type::atom("bool".to_string());
                 ctx.recover(unify(sub, &t0, &t1));
                 Expr::Bool(t0.clone(), *v)
             }
-            Expr::Var(t0, x) => match ctx.get(&x).expect("variable not found").clone() {
+            Expr::String(t0, v) => {
+                let t1 = Type::atom("String".to_string());
+                let v = v.clone();
+                ctx.recover(unify(sub, &t0, &t1));
+                Expr::String(t0.clone(), v)
+            }
+            Expr::Unit(t0) => {
+                let t1 = Type::atom("()".to_string());
+                ctx.recover(unify(sub, &t0, &t1));
+                Expr::Unit(t0.clone())
+            }
+            Expr::Struct(_t0, _xes, _) => {
+                todo!()
+            }
+            Expr::Enum(_t0, _x, _xes, _) => {
+                todo!()
+            }
+            Expr::Tuple(_t0, _xes) => {
+                todo!()
+            }
+            Expr::Var(t0, x) => match ctx.get(&x).unwrap().clone() {
                 Binding::Var(t1) => {
                     ctx.recover(unify(sub, &t0, &t1));
                     Expr::Var(t0.clone(), x.clone())
@@ -185,6 +284,8 @@ impl Expr {
                 Expr::Block(t0.clone(), ss, e.into())
             }
             Expr::From(..) => todo!(),
+            Expr::Field(_, _, _) => todo!(),
+            Expr::Assoc(_, _, _) => todo!(),
         }
     }
 }

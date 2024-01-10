@@ -5,30 +5,53 @@ pub struct Program {
     pub stmts: Vec<Stmt>,
 }
 
+// An impl is like a rule
 // forall <quantifiers> <head> :- <body>.
 // impl<quantifiers> <head> where <body>
 // i.e., impl<T> Clone for Vec<T> where T: Clone {}
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Impl {
+pub struct StmtImpl {
     pub generics: Vec<Name>,
-    pub head: Pred,
-    pub body: Vec<Pred>,
-    pub defs: Vec<Def>,
+    pub head: Trait,
+    pub body: Vec<Trait>,
+    pub defs: Vec<StmtDef>,
 }
 
+impl StmtImpl {
+    pub fn new(generics: Vec<Name>, head: Trait, body: Vec<Trait>, defs: Vec<StmtDef>) -> StmtImpl {
+        StmtImpl {
+            generics,
+            body,
+            head,
+            defs,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct StmtTrait {
+    pub generics: Vec<Name>,
+    pub head: Trait,
+    pub body: Vec<Trait>,
+    pub defs: Vec<StmtDef>,
+    pub assocs: Vec<(Name, Type)>,
+}
+
+// A trait is like a predicate
 // <name>(<types>)
 // e.g., Clone(i32)
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Pred {
+pub struct Trait {
     pub name: Name,
     pub types: Vec<Type>,
     pub assocs: Vec<(Name, Type)>,
 }
 
+// A type is like a proposition
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Type {
     Cons(Name, Vec<Type>),
-    Assoc(Pred, Name),
+    Assoc(Trait, Name),
     Var(Name),
     Hole,
 }
@@ -58,34 +81,114 @@ pub enum CompilerError {
 
 pub enum Candidate {
     // An implementation of a trait for a type.
-    Impl(Impl),
+    Impl(StmtImpl),
     // A bound in a where clause
-    Pred(Pred),
+    Pred(Trait),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Stmt {
-    Var(Var),
-    Def(Def),
-    Impl(Impl),
+    Var(StmtVar),
+    Def(StmtDef),
+    Impl(StmtImpl),
+    Struct(StmtStruct),
+    Enum(StmtEnum),
     Expr(Expr),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Var {
+pub struct StmtVar {
     pub name: Name,
     pub ty: Type,
     pub expr: Expr,
 }
 
+impl StmtVar {
+    pub fn new(name: impl Into<Name>, ty: Type, expr: Expr) -> StmtVar {
+        StmtVar {
+            name: name.into(),
+            ty,
+            expr,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Def {
+pub struct StmtDef {
     pub name: Name,
     pub generics: Vec<Name>,
-    pub preds: Vec<Pred>,
+    pub preds: Vec<Trait>,
     pub params: Vec<Param>,
     pub ty: Type,
     pub expr: Expr,
+}
+
+impl StmtDef {
+    pub fn new(
+        name: impl Into<Name>,
+        generics: Vec<Name>,
+        preds: Vec<Trait>,
+        params: Vec<Param>,
+        ty: Type,
+        expr: Expr,
+    ) -> StmtDef {
+        StmtDef {
+            name: name.into(),
+            generics,
+            preds,
+            params,
+            ty,
+            expr,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct StmtStruct {
+    pub name: Name,
+    pub generics: Vec<Name>,
+    pub preds: Vec<Trait>,
+    pub fields: Vec<(Name, Type)>,
+}
+
+impl StmtStruct {
+    pub fn new(
+        name: impl Into<Name>,
+        generics: Vec<Name>,
+        preds: Vec<Trait>,
+        fields: Vec<(Name, Type)>,
+    ) -> StmtStruct {
+        StmtStruct {
+            name: name.into(),
+            generics,
+            preds,
+            fields,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct StmtEnum {
+    pub name: Name,
+    pub generics: Vec<Name>,
+    pub preds: Vec<Trait>,
+    pub variants: Vec<(Name, Type)>,
+}
+
+impl StmtEnum {
+    pub fn new(
+        name: impl Into<Name>,
+        generics: Vec<Name>,
+        preds: Vec<Trait>,
+        variants: Vec<(Name, Type)>,
+    ) -> StmtEnum {
+        StmtEnum {
+            name: name.into(),
+            generics,
+            preds,
+            variants,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -93,10 +196,17 @@ pub enum Expr {
     Int(Type, String),
     Float(Type, String),
     Bool(Type, bool),
+    String(Type, String),
+    Unit(Type),
+    Struct(Type, Name, Vec<(Name, Expr)>),
+    Tuple(Type, Vec<Expr>),
+    Enum(Type, Name, Name, Box<Expr>),
+    Field(Type, Box<Expr>, Name),
     Var(Type, Name),
     Call(Type, Box<Expr>, Vec<Expr>),
     Block(Type, Vec<Stmt>, Box<Expr>),
     From(Type, Name, Box<Expr>, Box<Query>),
+    Assoc(Type, Trait, Name),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -118,124 +228,15 @@ pub enum WhereExpr {
     Call(Expr, Vec<Expr>),
 }
 
-pub struct Context {
-    tvars: usize,
-    stack: Vec<Scope>,
-    pub errors: Vec<CompilerError>,
-}
-
-pub struct Scope {
-    impls: Vec<Impl>,
-    binds: Vec<(Name, Binding)>,
-}
-
-impl Scope {
-    pub fn new() -> Scope {
-        Scope {
-            impls: vec![],
-            binds: vec![],
-        }
-    }
-}
-
-// pub struct Goal {}
-
-// pub struct ImplDef {
-//     generics: Vec<Name>,
-//     def: Def,
-//     imp: Pred,
-// }
-
-#[derive(Debug, Clone)]
-pub enum Binding {
-    Var(Type),
-    Def(Vec<Name>, Vec<Pred>, Vec<Type>, Type),
-    Impl(Impl),
-}
-
 impl Program {
     pub fn new(stmts: Vec<Stmt>) -> Program {
         Program { stmts }
     }
 }
 
-impl Var {
-    pub fn new(name: impl Into<Name>, ty: Type, expr: Expr) -> Var {
-        Var {
-            name: name.into(),
-            ty,
-            expr,
-        }
-    }
-}
-
-impl Def {
-    pub fn new(
-        name: impl Into<Name>,
-        generics: Vec<Name>,
-        preds: Vec<Pred>,
-        params: Vec<Param>,
-        ty: Type,
-        expr: Expr,
-    ) -> Def {
-        Def {
-            name: name.into(),
-            generics,
-            preds,
-            params,
-            ty,
-            expr,
-        }
-    }
-}
-
-impl Context {
-    pub fn new() -> Context {
-        Context {
-            tvars: 0,
-            stack: vec![Scope::new()],
-            errors: vec![],
-        }
-    }
-
-    pub fn recover<T>(&mut self, r: Result<T, CompilerError>) {
-        if let Err(e) = r {
-            self.errors.push(e);
-        }
-    }
-
-    pub fn new_tyvar(&mut self) -> Type {
-        self.tvars += 1;
-        Type::Var(format!("?T{}", self.tvars - 1))
-    }
-
-    pub fn get(&self, x1: &str) -> Option<&Binding> {
-        self.stack
-            .iter()
-            .rev()
-            .find_map(|s| s.binds.iter().find(|(x0, _)| x0 == x1).map(|(_, b)| b))
-    }
-
-    pub fn bind(&mut self, name: Name, b: Binding) {
-        self.stack.last_mut().unwrap().binds.push((name, b));
-    }
-
-    pub fn add_impl(&mut self, i: Impl) {
-        self.stack.last_mut().unwrap().impls.push(i);
-    }
-
-    pub fn impls(&self) -> Vec<Impl> {
-        self.stack
-            .iter()
-            .rev()
-            .flat_map(|s| s.impls.clone())
-            .collect()
-    }
-}
-
-impl Pred {
-    pub fn new(name: impl Into<Name>, types: Vec<Type>, assocs: Vec<(Name, Type)>) -> Pred {
-        Pred {
+impl Trait {
+    pub fn new(name: impl Into<Name>, types: Vec<Type>, assocs: Vec<(Name, Type)>) -> Trait {
+        Trait {
             name: name.into(),
             types,
             assocs,
@@ -256,19 +257,8 @@ impl Type {
         Type::Cons(x.into(), Vec::new())
     }
 
-    pub fn assoc(i: Pred, x: impl Into<Name>) -> Type {
+    pub fn assoc(i: Trait, x: impl Into<Name>) -> Type {
         Type::Assoc(i, x.into())
-    }
-}
-
-impl Impl {
-    pub fn new(generics: Vec<Name>, head: Pred, body: Vec<Pred>, defs: Vec<Def>) -> Impl {
-        Impl {
-            generics,
-            body,
-            head,
-            defs,
-        }
     }
 }
 
@@ -278,10 +268,52 @@ impl Expr {
             Expr::Int(t, ..) => t,
             Expr::Float(t, ..) => t,
             Expr::Bool(t, ..) => t,
+            Expr::String(t, ..) => t,
+            Expr::Unit(t) => t,
+            Expr::Struct(t, ..) => t,
+            Expr::Tuple(t, ..) => t,
+            Expr::Enum(t, ..) => t,
             Expr::Var(t, ..) => t,
             Expr::Call(t, ..) => t,
             Expr::Block(t, ..) => t,
             Expr::From(t, ..) => t,
+            Expr::Field(t, ..) => t,
+            Expr::Assoc(t, _, _) => t,
         }
+    }
+}
+
+impl From<StmtVar> for Stmt {
+    fn from(v: StmtVar) -> Stmt {
+        Stmt::Var(v)
+    }
+}
+
+impl From<StmtDef> for Stmt {
+    fn from(d: StmtDef) -> Stmt {
+        Stmt::Def(d)
+    }
+}
+impl From<StmtImpl> for Stmt {
+    fn from(i: StmtImpl) -> Stmt {
+        Stmt::Impl(i)
+    }
+}
+
+impl From<Expr> for Stmt {
+    fn from(e: Expr) -> Stmt {
+        Stmt::Expr(e)
+    }
+}
+
+impl From<StmtStruct> for Stmt {
+    fn from(s: StmtStruct) -> Stmt {
+        Stmt::Struct(s)
+    }
+}
+
+impl From<StmtEnum> for Stmt {
+    fn from(e: StmtEnum) -> Stmt {
+        Stmt::Enum(e)
     }
 }

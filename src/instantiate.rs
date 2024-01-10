@@ -1,8 +1,8 @@
-use crate::data::Context;
-use crate::data::Def;
-use crate::data::Impl;
+use crate::data::StmtDef;
+use crate::data::StmtImpl;
+use crate::infer::Context;
 
-pub fn instantiate_impl(imp: &Impl, ctx: &mut Context) -> Impl {
+pub fn instantiate_impl(imp: &StmtImpl, ctx: &mut Context) -> StmtImpl {
     let sub = imp
         .generics
         .iter()
@@ -13,10 +13,10 @@ pub fn instantiate_impl(imp: &Impl, ctx: &mut Context) -> Impl {
     let body = imp.body.iter().map(|i| i.apply(&sub)).collect::<Vec<_>>();
     let defs = imp.defs.iter().map(|d| d.apply(&sub)).collect::<Vec<_>>();
 
-    Impl::new(vec![], head, body, defs)
+    StmtImpl::new(vec![], head, body, defs)
 }
 
-pub fn instantiate_def(def: &mut Def, ctx: &mut Context) -> Def {
+pub fn instantiate_def(def: &mut StmtDef, ctx: &mut Context) -> StmtDef {
     let sub = def
         .generics
         .iter()
@@ -35,5 +35,5 @@ pub fn instantiate_def(def: &mut Def, ctx: &mut Context) -> Def {
 
     let expr = def.expr.apply(&sub);
 
-    Def::new(def.name.clone(), vec![], body, params, ty, expr)
+    StmtDef::new(def.name.clone(), vec![], body, params, ty, expr)
 }

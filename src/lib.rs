@@ -10,11 +10,11 @@ pub mod token;
 
 use data::Candidate;
 use data::CompilerError;
-use data::Context;
-use data::Impl;
+use data::StmtImpl;
 use data::Name;
-use data::Pred;
+use data::Trait;
 use data::Type;
+use infer::Context;
 use instantiate::instantiate_impl;
 
 // For each function matching the goal, solve the subgoals.
@@ -31,9 +31,9 @@ use instantiate::instantiate_impl;
 // }
 
 pub fn solve(
-    goal: &Pred,
-    impls: &[Impl],
-    preds: &[Pred],
+    goal: &Trait,
+    impls: &[StmtImpl],
+    preds: &[Trait],
     sub: &mut Vec<(Name, Type)>,
     ctx: &mut Context,
 ) -> Result<Candidate, CompilerError> {
@@ -63,7 +63,7 @@ pub fn solve(
 }
 
 // Checks if i0 and i1 match, and if so, returns a substitution.
-fn matches(s: &mut Vec<(Name, Type)>, i0: &Pred, i1: &Pred) -> bool {
+fn matches(s: &mut Vec<(Name, Type)>, i0: &Trait, i1: &Trait) -> bool {
     i0.name == i1.name
         && i0.types.len() == i1.types.len()
         && i1

@@ -1,5 +1,4 @@
 use trait_solver::data::Type;
-use trait_solver::helper::t;
 use trait_solver::unify;
 
 #[test]
@@ -28,7 +27,10 @@ fn test_unify3() {
 
 #[test]
 fn test_unify4() {
-    let mut substs = vec![("T".into(), t("i32")), ("U".into(), t("i32"))];
+    let mut substs = vec![
+        ("T".into(), Type::parse("i32")),
+        ("U".into(), Type::parse("i32")),
+    ];
     let t0 = Type::parse("?T");
     let t1 = Type::parse("?U");
     assert!(unify(&mut substs, &t0, &t1).is_ok());
@@ -36,7 +38,7 @@ fn test_unify4() {
 
 #[test]
 fn test_unify5() {
-    let mut substs = vec![("T".into(), t("i32"))];
+    let mut substs = vec![("T".into(), Type::parse("i32"))];
     let t0 = Type::parse("Vec[?T]");
     let t1 = Type::parse("Vec[i32]");
     assert!(unify(&mut substs, &t0, &t1).is_ok());

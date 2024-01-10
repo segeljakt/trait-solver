@@ -1,13 +1,13 @@
-use crate::data::Context;
-use crate::data::Def;
+use crate::data::StmtDef;
 use crate::data::Expr;
-use crate::data::Impl;
+use crate::data::StmtImpl;
 use crate::data::Param;
-use crate::data::Pred;
+use crate::data::Trait;
 use crate::data::Program;
 use crate::data::Stmt;
 use crate::data::Type;
-use crate::data::Var;
+use crate::data::StmtVar;
+use crate::infer::Context;
 
 // Replace all holes with fresh type variables.
 
@@ -60,16 +60,18 @@ impl Stmt {
                 let e = e.annotate(ctx);
                 Stmt::Expr(e)
             }
+            Stmt::Struct(_) => todo!(),
+            Stmt::Enum(_) => todo!(),
         }
     }
 }
 
-impl Var {
-    pub fn annotate(&self, ctx: &mut Context) -> Var {
+impl StmtVar {
+    pub fn annotate(&self, ctx: &mut Context) -> StmtVar {
         let x = self.name.clone();
         let t = self.ty.annotate(ctx);
         let e = self.expr.annotate(ctx);
-        Var::new(x, t, e)
+        StmtVar::new(x, t, e)
     }
 }
 
@@ -90,6 +92,15 @@ impl Expr {
                 let t = t.annotate(ctx);
                 Expr::Bool(t, *v)
             }
+            Expr::String(t, v) => {
+                let t = t.annotate(ctx);
+                let v = v.clone();
+                Expr::String(t, v)
+            }
+            Expr::Unit(t) => {
+                let t = t.annotate(ctx);
+                Expr::Unit(t)
+            }
             Expr::Var(t, x) => {
                 let t = t.annotate(ctx);
                 let x = x.clone();
@@ -97,30 +108,40 @@ impl Expr {
             }
             Expr::Call(t, e, es) => {
                 let t = t.annotate(ctx);
-                let e = Box::new(e.as_ref().annotate(ctx));
+                let e = Box::new(e.annotate(ctx));
                 let es = es.into_iter().map(|e| e.annotate(ctx)).collect();
                 Expr::Call(t, e, es)
             }
             Expr::Block(t, ss, e) => {
                 let t = t.annotate(ctx);
                 let ss = ss.into_iter().map(|s| s.annotate(ctx)).collect();
-                let e = Box::new(e.as_ref().annotate(ctx));
+                let e = Box::new(e.annotate(ctx));
                 Expr::Block(t, ss, e)
             }
             Expr::From(..) => todo!(),
+            Expr::Struct(..) => todo!(),
+            Expr::Enum(..) => todo!(),
+            Expr::Field(t, e, x) => {
+                let t = t.annotate(ctx);
+                let e = Box::new(e.annotate(ctx));
+                let x = x.clone();
+                Expr::Field(t, e, x)
+            }
+            Expr::Tuple(_, _) => todo!(),
+            Expr::Assoc(_, _, _) => todo!(),
         }
     }
 }
 
-impl Def {
-    pub fn annotate(&self, ctx: &mut Context) -> Def {
+impl StmtDef {
+    pub fn annotate(&self, ctx: &mut Context) -> StmtDef {
         let name = self.name.clone();
         let generics = self.generics.clone();
         let preds = self.preds.iter().map(|p| p.annotate(ctx)).collect();
         let params = self.params.iter().map(|p| p.annotate(ctx)).collect();
         let ty = self.ty.annotate(ctx);
         let expr = self.expr.annotate(ctx);
-        Def::new(name, generics, preds, params, ty, expr)
+        StmtDef::new(name, generics, preds, params, ty, expr)
     }
 }
 
@@ -132,18 +153,18 @@ impl Param {
     }
 }
 
-impl Impl {
-    pub fn annotate(&self, ctx: &mut Context) -> Impl {
+impl StmtImpl {
+    pub fn annotate(&self, ctx: &mut Context) -> StmtImpl {
         let generics = self.generics.clone();
         let head = self.head.annotate(ctx);
         let body = self.body.iter().map(|p| p.annotate(ctx)).collect();
         let defs = self.defs.iter().map(|d| d.annotate(ctx)).collect();
-        Impl::new(generics, head, body, defs)
+        StmtImpl::new(generics, head, body, defs)
     }
 }
 
-impl Pred {
-    pub fn annotate(&self, ctx: &mut Context) -> Pred {
+impl Trait {
+    pub fn annotate(&self, ctx: &mut Context) -> Trait {
         let name = self.name.clone();
         let types = self.types.iter().map(|t| t.annotate(ctx)).collect();
         let assocs = self
@@ -151,6 +172,6 @@ impl Pred {
             .iter()
             .map(|(x, t)| (x.clone(), t.annotate(ctx)))
             .collect();
-        Pred::new(name, types, assocs)
+        Trait::new(name, types, assocs)
     }
 }

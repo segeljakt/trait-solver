@@ -1,18 +1,18 @@
-use trait_solver::data::StmtImpl;
-use trait_solver::data::Trait;
-use trait_solver::data::Type;
-use trait_solver::infer::Context;
-use trait_solver::solve;
-use trait_solver::unify;
+use aqua::data::StmtImpl;
+use aqua::data::Trait;
+use aqua::data::Type;
+use aqua::infer::Context;
+use aqua::solve;
+use aqua::unify;
 
 #[test]
 fn test_trait1() {
     let impls = [StmtImpl::parse("impl[T] Clone[T] {}")];
     let mut sub = vec![];
     let goal = Trait::parse("Clone[i32]");
-    let mut context = Context::new();
+    let mut ctx = Context::new();
 
-    assert!(solve(&goal, &impls, &[], &mut sub, &mut context).is_ok());
+    assert!(solve(&goal, &impls, &[], &mut sub, &mut ctx).is_some());
 }
 
 #[test]
@@ -21,9 +21,9 @@ fn test_trait2() {
     let mut sub = vec![];
 
     let goal = Trait::parse("Clone[i32]");
-    let mut context = Context::new();
+    let mut ctx = Context::new();
 
-    assert!(solve(&goal, &impls, &[], &mut sub, &mut context).is_ok());
+    assert!(solve(&goal, &impls, &[], &mut sub, &mut ctx).is_some());
 }
 
 #[test]
@@ -35,9 +35,9 @@ fn test_trait3() {
     let mut sub = vec![];
 
     let goal = Trait::parse("Clone[Vec[i32]]");
-    let mut context = Context::new();
+    let mut ctx = Context::new();
 
-    assert!(solve(&goal, &impls, &[], &mut sub, &mut context).is_ok());
+    assert!(solve(&goal, &impls, &[], &mut sub, &mut ctx).is_some());
 }
 
 #[test]
@@ -50,9 +50,9 @@ fn test_trait4() {
     let mut sub = vec![];
     let goal = Trait::parse("Clone[Vec[Vec[i32]]]");
 
-    let mut context = Context::new();
+    let mut ctx = Context::new();
 
-    assert!(solve(&goal, &impls, &[], &mut sub, &mut context).is_ok());
+    assert!(solve(&goal, &impls, &[], &mut sub, &mut ctx).is_some());
 }
 
 #[test]
@@ -62,9 +62,9 @@ fn test_trait5() {
     )];
     let mut sub = vec![];
     let goal = Trait::parse("Iterator[Vec[i32], Item = ?X]");
-    let mut context = Context::new();
-    assert!(solve(&goal, &impls, &[], &mut sub, &mut context).is_ok());
-    let t0 = Type::parse("Iterator[Vec[i32]].Item");
+    let mut ctx = Context::new();
+    assert!(solve(&goal, &impls, &[], &mut sub, &mut ctx).is_some());
+    let t0 = Type::parse("Iterator[Vec[i32]].Item").annotate(&mut ctx);
     let t1 = Type::parse("i32");
     assert!(unify(&mut sub, &t0, &t1).is_ok());
 }
@@ -77,9 +77,9 @@ fn test_trait6() {
     ];
     let mut sub = vec![];
     let goal = Trait::parse("Add[i32, i32, Output = ?X]");
-    let mut context = Context::new();
-    assert!(solve(&goal, &impls, &[], &mut sub, &mut context).is_ok());
-    let t0 = Type::parse("Add[i32, i32].Output");
+    let mut ctx = Context::new();
+    assert!(solve(&goal, &impls, &[], &mut sub, &mut ctx).is_some());
+    let t0 = Type::parse("Add[i32, i32].Output").annotate(&mut ctx);
     let t1 = Type::parse("i32");
     assert!(unify(&mut sub, &t0, &t1).is_ok());
 }
@@ -100,9 +100,13 @@ fn test_trait7() {
     ];
     let mut sub = vec![];
     let goal = Trait::parse("Add[Vec[i32], i32, Output = ?Y]");
-    let mut context = Context::new();
-    assert!(solve(&goal, &impls, &[], &mut sub, &mut context).is_ok());
-    let t0 = Type::parse("Add[Vec[i32], i32].Output");
+    let mut ctx = Context::new();
+    let impls = impls
+        .into_iter()
+        .map(|i| i.annotate(&mut ctx))
+        .collect::<Vec<_>>();
+    assert!(solve(&goal, &impls, &[], &mut sub, &mut ctx).is_some());
+    let t0 = Type::parse("Add[Vec[i32], i32].Output").annotate(&mut ctx);
     let t1 = Type::parse("Vec[i32]");
     assert!(unify(&mut sub, &t0, &t1).is_ok());
 }
@@ -115,9 +119,9 @@ fn test_trait8() {
     ];
     let mut sub = vec![];
     let goal = Trait::parse("Add[i64, i32, Output = ?X]");
-    let mut context = Context::new();
-    assert!(solve(&goal, &impls, &[], &mut sub, &mut context).is_ok());
-    let t0 = Type::parse("Add[i64, i32].Output");
+    let mut ctx = Context::new();
+    assert!(solve(&goal, &impls, &[], &mut sub, &mut ctx).is_some());
+    let t0 = Type::parse("Add[i64, i32].Output").annotate(&mut ctx);
     let t1 = Type::parse("i64");
     assert!(unify(&mut sub, &t0, &t1).is_ok());
 }
@@ -139,9 +143,9 @@ fn test_trait9() {
     ];
     let mut sub = vec![];
     let goal = Trait::parse("IntoIterator[Vec[i32], Item = ?A, IntoIter = ?B]");
-    let mut context = Context::new();
-    assert!(solve(&goal, &impls, &[], &mut sub, &mut context).is_ok());
-    let t0 = Type::parse("IntoIterator[Vec[i32]].IntoIter");
+    let mut ctx = Context::new();
+    assert!(solve(&goal, &impls, &[], &mut sub, &mut ctx).is_some());
+    let t0 = Type::parse("IntoIterator[Vec[i32]].IntoIter").annotate(&mut ctx);
     let t1 = Type::parse("VecIterator[i32]");
     assert!(unify(&mut sub, &t0, &t1).is_ok());
 }
@@ -165,6 +169,6 @@ fn test_trait10() {
 
     let mut sub = vec![];
     let goal = Trait::parse("IntoIterator[Vec[i32], Item = ?X, IntoIter = ?Y]");
-    let mut context = Context::new();
-    assert!(solve(&goal, &impls, &[], &mut sub, &mut context).is_ok());
+    let mut ctx = Context::new();
+    assert!(solve(&goal, &impls, &[], &mut sub, &mut ctx).is_some());
 }

@@ -1,13 +1,13 @@
-use crate::data::StmtDef;
 use crate::data::Expr;
-use crate::data::StmtImpl;
 use crate::data::Name;
 use crate::data::Param;
-use crate::data::Trait;
 use crate::data::Program;
 use crate::data::Stmt;
-use crate::data::Type;
+use crate::data::StmtDef;
+use crate::data::StmtImpl;
 use crate::data::StmtVar;
+use crate::data::Trait;
+use crate::data::Type;
 
 impl Program {
     pub fn apply(&self, sub: &[(Name, Type)]) -> Program {
@@ -44,22 +44,35 @@ impl Stmt {
 
 impl StmtVar {
     pub fn apply(&self, sub: &[(Name, Type)]) -> StmtVar {
+        let span = self.span;
         let name = self.name.clone();
         let ty = self.ty.apply(sub);
         let expr = self.expr.apply(sub);
-        StmtVar::new(name, ty, expr)
+        StmtVar::new(span, name, ty, expr)
     }
 }
 
 impl StmtDef {
     pub fn apply(&self, sub: &[(Name, Type)]) -> StmtDef {
+        let span = self.span;
         let name = self.name.clone();
         let generics = self.generics.clone();
         let qs = self.preds.iter().map(|p| p.apply(sub)).collect();
         let ps = self.params.iter().map(|p| p.apply(sub)).collect();
         let t = self.ty.apply(sub);
         let e = self.expr.apply(sub);
-        StmtDef::new(name, generics, qs, ps, t, e)
+        StmtDef::new(span, name, generics, qs, ps, t, e)
+    }
+}
+
+impl StmtImpl {
+    pub fn apply(&self, sub: &[(Name, Type)]) -> StmtImpl {
+        let span = self.span;
+        let generics = self.generics.clone();
+        let head = self.head.apply(sub);
+        let body = self.body.iter().map(|p| p.apply(sub)).collect();
+        let defs = self.defs.iter().map(|d| d.apply(sub)).collect();
+        StmtImpl::new(span, generics, head, body, defs)
     }
 }
 
@@ -91,6 +104,7 @@ impl Type {
 
 impl Trait {
     pub fn apply(&self, sub: &[(Name, Type)]) -> Trait {
+        let span = self.span;
         let name = self.name.clone();
         let types = self.types.iter().map(|t| t.apply(sub)).collect();
         let assocs = self
@@ -98,77 +112,72 @@ impl Trait {
             .iter()
             .map(|(x, t)| (x.clone(), t.apply(sub)))
             .collect();
-        Trait::new(name, types, assocs)
+        Trait::new(span, name, types, assocs)
     }
 }
 
 impl Expr {
     pub fn apply(&self, sub: &[(Name, Type)]) -> Expr {
         match self {
-            Expr::Int(t, v) => {
+            Expr::Int(s, t, v) => {
                 let t = t.apply(sub);
                 let v = v.clone();
-                Expr::Int(t, v)
+                Expr::Int(*s, t, v)
             }
-            Expr::Float(t, v) => {
+            Expr::Float(s, t, v) => {
                 let t = t.apply(sub);
                 let v = v.clone();
-                Expr::Float(t, v)
+                Expr::Float(*s, t, v)
             }
-            Expr::Bool(t, b) => {
+            Expr::Bool(s, t, v) => {
                 let t = t.apply(sub);
-                Expr::Bool(t, *b)
+                Expr::Bool(*s, t, *v)
             }
-            Expr::String(t, s) => {
+            Expr::String(s, t, v) => {
                 let t = t.apply(sub);
-                let s = s.clone();
-                Expr::String(t, s)
+                let v = v.clone();
+                Expr::String(*s, t, v)
             }
-            Expr::Unit(t) => {
+            Expr::Unit(s, t) => {
                 let t = t.apply(sub);
-                Expr::Unit(t)
+                Expr::Unit(*s, t)
             }
-            Expr::Var(t, x) => {
+            Expr::Var(s, t, x) => {
                 let t = t.apply(sub);
                 let x = x.clone();
-                Expr::Var(t, x)
+                Expr::Var(*s, t, x)
             }
-            Expr::Call(t, e, es) => {
+            Expr::Call(s, t, e, es) => {
                 let t = t.apply(sub);
                 let e = Box::new(e.apply(sub));
                 let es = es.iter().map(|e| e.apply(sub)).collect();
-                Expr::Call(t, e, es)
+                Expr::Call(*s, t, e, es)
             }
-            Expr::Block(t, ss, e) => {
+            Expr::Block(s, t, ss, e) => {
                 let t = t.apply(sub);
                 let ss = ss.iter().map(|s| s.apply(sub)).collect();
                 let e = Box::new(e.apply(sub));
-                Expr::Block(t, ss, e)
+                Expr::Block(*s, t, ss, e)
             }
             Expr::From(..) => todo!(),
-            Expr::Struct(_, _, _) => todo!(),
-            Expr::Enum(_, _, _, _) => todo!(),
-            Expr::Field(_, _, _) => todo!(),
-            Expr::Tuple(_, _) => todo!(),
-            Expr::Assoc(_, _, _) => todo!(),
+            Expr::Struct(_, _, _, _) => todo!(),
+            Expr::Enum(_, _, _, _, _) => todo!(),
+            Expr::Field(_, _, _, _) => todo!(),
+            Expr::Tuple(_, _, _) => todo!(),
+            Expr::Assoc(_, _, _, _) => todo!(),
+            Expr::Err(s, t) => {
+                let t = t.apply(sub);
+                Expr::Err(*s, t)
+            }
         }
     }
 }
 
 impl Param {
     pub fn apply(&self, sub: &[(Name, Type)]) -> Param {
+        let span = self.span;
         let name = self.name.clone();
         let t = self.ty.apply(sub);
-        Param::new(name, t)
-    }
-}
-
-impl StmtImpl {
-    pub fn apply(&self, sub: &[(Name, Type)]) -> StmtImpl {
-        let generics = self.generics.clone();
-        let head = self.head.apply(sub);
-        let body = self.body.iter().map(|p| p.apply(sub)).collect();
-        let defs = self.defs.iter().map(|d| d.apply(sub)).collect();
-        StmtImpl::new(generics, head, body, defs)
+        Param::new(span, name, t)
     }
 }

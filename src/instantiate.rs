@@ -13,10 +13,10 @@ pub fn instantiate_impl(imp: &StmtImpl, ctx: &mut Context) -> StmtImpl {
     let body = imp.body.iter().map(|i| i.apply(&sub)).collect::<Vec<_>>();
     let defs = imp.defs.iter().map(|d| d.apply(&sub)).collect::<Vec<_>>();
 
-    StmtImpl::new(vec![], head, body, defs)
+    StmtImpl::new(imp.span, vec![], head, body, defs)
 }
 
-pub fn instantiate_def(def: &mut StmtDef, ctx: &mut Context) -> StmtDef {
+pub fn instantiate_def(def: &StmtDef, ctx: &mut Context) -> StmtDef {
     let sub = def
         .generics
         .iter()
@@ -24,16 +24,9 @@ pub fn instantiate_def(def: &mut StmtDef, ctx: &mut Context) -> StmtDef {
         .collect::<Vec<_>>();
 
     let body = def.preds.iter().map(|p| p.apply(&sub)).collect::<Vec<_>>();
-
-    let params = def
-        .params
-        .iter_mut()
-        .map(|p| p.apply(&sub))
-        .collect::<Vec<_>>();
-
+    let params = def.params.iter().map(|p| p.apply(&sub)).collect::<Vec<_>>();
     let ty = def.ty.apply(&sub);
-
     let expr = def.expr.apply(&sub);
 
-    StmtDef::new(def.name.clone(), vec![], body, params, ty, expr)
+    StmtDef::new(def.span, def.name.clone(), vec![], body, params, ty, expr)
 }

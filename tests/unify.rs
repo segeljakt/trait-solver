@@ -1,8 +1,13 @@
-use trait_solver::data::Type;
-use trait_solver::unify;
+mod util;
+
+use aqua::data::Type;
+use aqua::unify;
+
+use crate::util::t;
+use crate::util::tc;
 
 #[test]
-fn test_unify() {
+fn test_unify_atom0() {
     let mut substs = vec![];
     let t0 = Type::parse("i32");
     let t1 = Type::parse("i32");
@@ -10,7 +15,15 @@ fn test_unify() {
 }
 
 #[test]
-fn test_unify2() {
+fn test_unify_atom1() {
+    let mut substs = vec![];
+    let t0 = Type::parse("i32");
+    let t1 = Type::parse("i64");
+    assert_eq!(unify(&mut substs, &t0, &t1), Err((t("i32"), t("i64"))));
+}
+
+#[test]
+fn test_unify_var0() {
     let mut substs = vec![];
     let t0 = Type::parse("?T");
     let t1 = Type::parse("i32");
@@ -18,7 +31,7 @@ fn test_unify2() {
 }
 
 #[test]
-fn test_unify3() {
+fn test_unify_var1() {
     let mut substs = vec![];
     let t0 = Type::parse("i32");
     let t1 = Type::parse("?T");
@@ -26,7 +39,15 @@ fn test_unify3() {
 }
 
 #[test]
-fn test_unify4() {
+fn test_unify_var2() {
+    let mut substs = vec![];
+    let t0 = Type::parse("?T");
+    let t1 = Type::parse("?U");
+    assert!(unify(&mut substs, &t0, &t1).is_ok());
+}
+
+#[test]
+fn test_unify_var3() {
     let mut substs = vec![
         ("T".into(), Type::parse("i32")),
         ("U".into(), Type::parse("i32")),
@@ -37,7 +58,7 @@ fn test_unify4() {
 }
 
 #[test]
-fn test_unify5() {
+fn test_unify_tc0() {
     let mut substs = vec![("T".into(), Type::parse("i32"))];
     let t0 = Type::parse("Vec[?T]");
     let t1 = Type::parse("Vec[i32]");
@@ -45,7 +66,7 @@ fn test_unify5() {
 }
 
 #[test]
-fn test_unify6() {
+fn test_unify_tc1() {
     let mut substs = Vec::new();
     let t0 = Type::parse("Vec[?T]");
     let t1 = Type::parse("Vec[?U]");
@@ -53,9 +74,28 @@ fn test_unify6() {
 }
 
 #[test]
-fn test_not_unify() {
+fn test_unify_tc2() {
+    let mut substs = vec![("T".into(), Type::parse("i32"))];
+    let t0 = Type::parse("Vec[Vec[?T]]");
+    let t1 = Type::parse("Vec[Vec[?U]]");
+    assert!(unify(&mut substs, &t0, &t1).is_ok());
+}
+
+#[test]
+fn test_unify_tc3() {
+    let mut substs = vec![("T".into(), Type::parse("Vec[i32]"))];
+    let t0 = Type::parse("Vec[?T]");
+    let t1 = Type::parse("Vec[Vec[i32]]");
+    assert!(unify(&mut substs, &t0, &t1).is_ok());
+}
+
+#[test]
+fn test_unify_tc4() {
     let mut substs = vec![("T".into(), Type::parse("i32"))];
     let t0 = Type::parse("Vec[?T]");
     let t1 = Type::parse("Vec[i64]");
-    assert!(unify(&mut substs, &t0, &t1).is_err());
+    assert_eq!(
+        unify(&mut substs, &t0, &t1),
+        Err((tc("Vec", [t("i32")]), t1))
+    );
 }

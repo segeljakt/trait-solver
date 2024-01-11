@@ -1,11 +1,13 @@
-use trait_solver::data::Program;
-use trait_solver::helper::call;
-use trait_solver::helper::stmt_def;
-use trait_solver::helper::ev;
-use trait_solver::helper::int;
-use trait_solver::helper::program;
-use trait_solver::helper::t;
-use trait_solver::helper::tc;
+mod util;
+
+use aqua::data::Program;
+use util::call;
+use util::ev;
+use util::int;
+use util::program;
+use util::stmt_def;
+use util::t;
+use util::tc;
 
 #[test]
 fn test_function0() {
@@ -14,7 +16,7 @@ fn test_function0() {
          f();",
     );
     let result = prog.infer();
-    assert!(result.is_ok());
+    assert!(result.is_some());
 
     let prog2 = result.unwrap();
 
@@ -33,7 +35,7 @@ fn test_function1() {
         "def f(x: i32): i32 = x;
          f(0);",
     );
-    assert!(prog.infer().is_ok())
+    assert!(prog.infer().is_some())
 }
 
 // impl Clone[i32] {}

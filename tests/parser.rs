@@ -1,32 +1,59 @@
-use trait_solver::data::Expr;
-use trait_solver::data::Program;
-use trait_solver::data::StmtImpl;
-use trait_solver::data::Type;
-use trait_solver::helper::binop;
-use trait_solver::helper::block;
-use trait_solver::helper::bool;
-use trait_solver::helper::call;
-use trait_solver::helper::def;
-use trait_solver::helper::ev;
-use trait_solver::helper::expr_assoc;
-use trait_solver::helper::expr_struct;
-use trait_solver::helper::expr_tuple;
-use trait_solver::helper::field;
-use trait_solver::helper::hole;
-use trait_solver::helper::int;
-use trait_solver::helper::p;
-use trait_solver::helper::program;
-use trait_solver::helper::stmt_def;
-use trait_solver::helper::stmt_enum;
-use trait_solver::helper::stmt_expr;
-use trait_solver::helper::stmt_impl;
-use trait_solver::helper::stmt_struct;
-use trait_solver::helper::stmt_var;
-use trait_solver::helper::t;
-use trait_solver::helper::tc;
-use trait_solver::helper::type_assoc;
-use trait_solver::helper::unit;
-use trait_solver::helper::variant;
+mod util;
+
+use aqua::data::Expr;
+use aqua::data::Program;
+use aqua::data::StmtImpl;
+use aqua::data::Type;
+use aqua::diag::Sources;
+use aqua::lexer::Lexer;
+use aqua::parser::Parser;
+use util::binop;
+use util::block;
+use util::bool;
+use util::call;
+use util::def;
+use util::ev;
+use util::expr_assoc;
+use util::expr_struct;
+use util::expr_tuple;
+use util::field;
+use util::hole;
+use util::int;
+use util::program;
+use util::stmt_def;
+use util::stmt_enum;
+use util::stmt_expr;
+use util::stmt_impl;
+use util::stmt_struct;
+use util::stmt_var;
+use util::t;
+use util::tc;
+use util::tr;
+use util::type_assoc;
+use util::unit;
+use util::variant;
+use crate::util::float;
+
+#[test]
+fn test_parser_int0() {
+    let e0 = Expr::parse("1");
+    let e1 = int("1");
+    assert_eq!(e0, e1);
+}
+
+#[test]
+fn test_parser_int1() {
+    let e0 = Expr::parse("123");
+    let e1 = int("123");
+    assert_eq!(e0, e1);
+}
+
+#[test]
+fn test_parser_float0() {
+    let e0 = Expr::parse("1.0");
+    let e1 = float("1.0");
+    assert_eq!(e0, e1);
+}
 
 #[test]
 fn test_parser_binop0() {
@@ -128,7 +155,7 @@ fn test_parser_impl0() {
     );
     let p1 = program([stmt_impl(
         [],
-        p("Eq", [t("bool")], []),
+        tr("Eq", [t("bool")], []),
         [],
         [def(
             "eq",
@@ -155,7 +182,7 @@ fn test_parser_impl1() {
 fn test_parser_trait0() {
     let t0 = Type::parse("Iterator[Vec[i32]].Item");
     let t1 = type_assoc(
-        p("Iterator", [tc("Vec", [t("i32")])], [("Item", hole())]),
+        tr("Iterator", [tc("Vec", [t("i32")])], [("Item", hole())]),
         "Item",
     );
     assert_eq!(t0, t1);
@@ -187,11 +214,17 @@ fn test_parser_var2() {
 
 #[test]
 fn test_parser_struct0() {
+    let p0 = Program::parse("struct S { x: i32, y: i32 }");
+    let p1 = program([stmt_struct("S", [], [], [("x", t("i32")), ("y", t("i32"))])]);
+    assert_eq!(p0, p1);
+}
+
+#[test]
+fn test_parser_struct1() {
     let p0 = Program::parse(
         "struct S { x: i32, y: i32 }
          var s = S { x: 1, y: 2 };
-         s.x;
-         ",
+         s.x;",
     );
     let p1 = program([
         stmt_struct("S", [], [], [("x", t("i32")), ("y", t("i32"))]),
@@ -202,11 +235,11 @@ fn test_parser_struct0() {
         ),
         stmt_expr(field(ev("s"), "x")),
     ]);
-    assert_eq!(p0, p1);
+    assert_eq!(p0, p1, "{p0}\n{p1}");
 }
 
 #[test]
-fn test_parser_struct1() {
+fn test_parser_struct2() {
     let p0 = Program::parse(
         "struct S { x: i32 }
          var x = 0;
@@ -222,7 +255,7 @@ fn test_parser_struct1() {
 }
 
 #[test]
-fn test_parser_struct2() {
+fn test_parser_struct3() {
     let p0 = Program::parse(
         "struct S { x: i32 }
          var a = S { x: 0 };
@@ -238,7 +271,7 @@ fn test_parser_struct2() {
 }
 
 #[test]
-fn test_parser_struct3() {
+fn test_parser_struct4() {
     let p0 = Program::parse(
         "struct S { a: i32 }
          var a = S { a: 0 };
@@ -378,7 +411,7 @@ fn test_parser_paren2() {
 fn test_parser_assoc0() {
     let e0 = Expr::parse("Iterator[Vec[i32]].next");
     let e1 = expr_assoc(
-        p("Iterator", [tc("Vec", [t("i32")])], [("Item", hole())]),
+        tr("Iterator", [tc("Vec", [t("i32")])], [("Item", hole())]),
         "next",
     );
     assert_eq!(e0, e1);
@@ -387,7 +420,7 @@ fn test_parser_assoc0() {
 #[test]
 fn test_parser_assoc1() {
     let e0 = Expr::parse("Add[i32, i32].add;");
-    let e1 = expr_assoc(p("Add", [t("i32"), t("i32")], [("Output", hole())]), "add");
+    let e1 = expr_assoc(tr("Add", [t("i32"), t("i32")], [("Output", hole())]), "add");
     assert_eq!(e0, e1);
 }
 
@@ -395,7 +428,7 @@ fn test_parser_assoc1() {
 fn test_parser_assoc2() {
     let e0 = Type::parse("Iterator[Vec[i32]].Item");
     let e1 = type_assoc(
-        p("Iterator", [tc("Vec", [t("i32")])], [("Item", hole())]),
+        tr("Iterator", [tc("Vec", [t("i32")])], [("Item", hole())]),
         "Item",
     );
     assert_eq!(e0, e1);
@@ -409,3 +442,90 @@ fn test_parser_query0() {
          where x > 1;",
     );
 }
+
+#[test]
+fn test_parser_params0() {
+    let s = "def f(): i32 = 1;";
+    let mut sources = Sources::new();
+    let file = sources.add("0", s);
+    let mut parser = Parser::new(Lexer::new(file, "def f(): i32 = 1;"));
+    let p0 = parser.parse();
+    let p1 = program([stmt_def("f", [], [], [], t("i32"), int("1"))]);
+    parser.diags.print(&mut sources).unwrap();
+    assert_eq!(p0, p1);
+}
+
+#[test]
+fn test_parser_params1() {
+    let p0 = Program::parse("def f(x: i32): i32 = x;");
+    let p1 = program([stmt_def("f", [], [], [("x", t("i32"))], t("i32"), ev("x"))]);
+    assert_eq!(p0, p1, "{p0}\n{p1}");
+}
+
+#[test]
+fn test_parser_params2() {
+    let p0 = Program::parse("def f(x: i32,): i32 = x;");
+    let p1 = program([stmt_def("f", [], [], [("x", t("i32"))], t("i32"), ev("x"))]);
+    assert_eq!(p0, p1);
+}
+
+#[test]
+fn test_parser_params3() {
+    let p0 = Program::parse("def f(x: i32, y: i32): i32 = x;");
+    let p1 = program([stmt_def(
+        "f",
+        [],
+        [],
+        [("x", t("i32")), ("y", t("i32"))],
+        t("i32"),
+        ev("x"),
+    )]);
+    assert_eq!(p0, p1);
+}
+
+// TODO: Handle errors more gracefully.
+#[test]
+fn test_parser_generics0() {
+    let p0 = Program::parse("def f[](): i32 = 1;");
+    let p1 = program([stmt_def("f", [], [], [], t("i32"), int("1"))]);
+    assert_eq!(p0, p1);
+}
+
+#[test]
+fn test_parser_generics1() {
+    let p0 = Program::parse("def f[T](): i32 = 1;");
+    let p1 = program([stmt_def("f", ["T"], [], [], t("i32"), int("1"))]);
+    assert_eq!(p0, p1);
+}
+
+#[test]
+fn test_parser_generics2() {
+    let p0 = Program::parse("def f[T,](): i32 = 1;");
+    let p1 = program([stmt_def("f", ["T"], [], [], t("i32"), int("1"))]);
+    assert_eq!(p0, p1);
+}
+
+#[test]
+fn test_parser_generics3() {
+    let p0 = Program::parse("def f[T, U](): i32 = 1;");
+    let p1 = program([stmt_def("f", ["T", "U"], [], [], t("i32"), int("1"))]);
+    assert_eq!(p0, p1);
+}
+
+// #[test]
+// fn test_parser_err0() {
+//     let s = "1 + ;";
+//     let mut sources = Sources::new();
+//     let file = sources.next_file();
+//     let lexer = Lexer::new(file, s);
+//     let mut parser = Parser::new(lexer);
+//     let p0 = parser.parse();
+//     let p1 = program([stmt_expr(binop(int("1"), "__add__", expr_err()))]);
+//
+//     assert_eq!(p0, p1);
+//
+//     assert_eq!(
+//         parser.diags.string(&mut sources).unwrap(),
+//         "1:4: expected expression"
+//     );
+// }

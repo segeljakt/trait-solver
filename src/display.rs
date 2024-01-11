@@ -1,3 +1,4 @@
+use crate::data::Name;
 use crate::data::StmtDef;
 use crate::data::StmtEnum;
 use crate::data::Expr;
@@ -139,7 +140,7 @@ impl<'a> std::fmt::Display for Printer<'a, Type> {
                 }
             }
             Type::Assoc(i, x) => {
-                write!(f, "{}::{}", i.inner(self), x)?;
+                write!(f, "{}.{}", i.inner(self), x)?;
             }
             Type::Var(x) => {
                 write!(f, "{x}")?;
@@ -169,7 +170,7 @@ impl<'a> std::fmt::Display for Printer<'a, StmtVar> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "let {}: {} = {};",
+            "var {}: {} = {};",
             self.name,
             self.ty.inner(self),
             self.expr.inner(self)
@@ -260,30 +261,30 @@ impl<'a> std::fmt::Display for Printer<'a, Expr> {
             write!(f, "<")?;
         }
         match self.data {
-            Expr::Int(_, i) => {
+            Expr::Int(_, _, i) => {
                 write!(f, "{i}")?;
             }
-            Expr::Float(_, i) => {
+            Expr::Float(_, _, i) => {
                 write!(f, "{i}")?;
             }
-            Expr::Bool(_, b) => {
+            Expr::Bool(_, _, b) => {
                 write!(f, "{b}")?;
             }
-            Expr::String(_, s) => {
+            Expr::String(_, _, s) => {
                 write!(f, r#""{s}""#)?;
             }
-            Expr::Unit(_) => {
+            Expr::Unit(_, _) => {
                 write!(f, "()")?;
             }
-            Expr::Field(_, e, x) => {
+            Expr::Field(_, _, e, x) => {
                 write!(f, "{}.{}", e.inner(self), x)?;
             }
-            Expr::Tuple(_, es) => {
+            Expr::Tuple(_, _, es) => {
                 write!(f, "(")?;
                 sep(f, es, |f, e| write!(f, "{}", e.inner(self)))?;
                 write!(f, ")")?;
             }
-            Expr::Struct(_, x, xes) => {
+            Expr::Struct(_, _, x, xes) => {
                 write!(f, "{}", x)?;
                 write!(f, "{{")?;
                 sep(f, xes, |f, (x, e)| {
@@ -291,19 +292,19 @@ impl<'a> std::fmt::Display for Printer<'a, Expr> {
                 })?;
                 write!(f, "}}")?;
             }
-            Expr::Enum(_, _, _, _s) => {
+            Expr::Enum(_, _, _, _, _s) => {
                 todo!()
             }
-            Expr::Var(_, x) => {
+            Expr::Var(_, _, x) => {
                 write!(f, "{x}")?;
             }
-            Expr::Call(_, e, es) => {
+            Expr::Call(_, _, e, es) => {
                 write!(f, "{}", e.inner(self))?;
                 write!(f, "(")?;
                 sep(f, es, |f, e| write!(f, "{}", e.inner(self)))?;
                 write!(f, ")")?;
             }
-            Expr::Block(_, ss, e) => {
+            Expr::Block(_, _, ss, e) => {
                 write!(f, "do {{")?;
                 for s in ss {
                     self.indent(f)?;
@@ -313,10 +314,11 @@ impl<'a> std::fmt::Display for Printer<'a, Expr> {
                 write!(f, "}}")?;
             }
             Expr::From(..) => todo!(),
-            Expr::Assoc(_, _, _) => todo!(),
+            Expr::Assoc(_, _, tr, x) => write!(f, "{}.{}", tr, x)?,
+            Expr::Err(_, _) => todo!(),
         }
         if self.ctx.type_info {
-            write!(f, ":{}>", self.type_of().inner(self))?;
+            write!(f, ":{}>", self.ty().inner(self))?;
         }
         Ok(())
     }
@@ -328,5 +330,11 @@ impl<'a> std::fmt::Display for Printer<'a, Program> {
             write!(f, "{}", s.inner(self))?;
         }
         Ok(())
+    }
+}
+
+impl std::fmt::Display for Name {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.data)
     }
 }

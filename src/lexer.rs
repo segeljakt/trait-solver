@@ -1,4 +1,4 @@
-use std::ops::Range;
+use crate::diag::Diags;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Token<'a> {
@@ -17,7 +17,6 @@ pub enum Token<'a> {
     Dot,
     DotDot,
     Colon,
-    ColonColon,
     SemiColon,
     Comma,
     LParen,
@@ -47,81 +46,155 @@ pub enum Token<'a> {
     Int(&'a str),
     Float(&'a str),
     String(&'a str),
-    Char(char),
-    // Error
+    Char(&'a str),
+    // Special
     Err,
+    Eof,
 }
 
-#[derive(Eq, PartialEq, Clone, Copy, Hash, Default, Debug)]
-pub struct Span {
-    pub start: u32,
-    pub end: u32,
-}
-
-impl PartialEq<Span> for Range<usize> {
-    fn eq(&self, other: &Span) -> bool {
-        self.start == other.start as usize && self.end == other.end as usize
-    }
-}
-
-impl PartialEq<Range<usize>> for Span {
-    fn eq(&self, other: &Range<usize>) -> bool {
-        self.start as usize == other.start && self.end as usize == other.end
-    }
-}
-
-impl Span {
-    pub fn new(start: u32, end: u32) -> Span {
-        Span { start, end }
-    }
-
-    pub fn len(&self) -> u32 {
-        self.end - self.start
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.start == self.end
-    }
-}
-
-impl From<Span> for Range<usize> {
-    fn from(span: Span) -> Self {
-        (span.start as usize)..(span.end as usize)
-    }
-}
-
-impl From<Range<usize>> for Span {
-    fn from(range: Range<usize>) -> Self {
-        Span {
-            start: range.start as u32,
-            end: range.end as u32,
+impl<'a> std::fmt::Display for Token<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Token::Eq => write!(f, "="),
+            Token::EqEq => write!(f, "=="),
+            Token::BangEq => write!(f, "!="),
+            Token::LAngle => write!(f, "<"),
+            Token::LAngleEq => write!(f, "<="),
+            Token::RAngle => write!(f, ">"),
+            Token::RAngleEq => write!(f, ">="),
+            Token::Plus => write!(f, "+"),
+            Token::Minus => write!(f, "-"),
+            Token::Star => write!(f, "*"),
+            Token::Slash => write!(f, "/"),
+            Token::Dot => write!(f, "."),
+            Token::DotDot => write!(f, ".."),
+            Token::Colon => write!(f, ":"),
+            Token::SemiColon => write!(f, ";"),
+            Token::Comma => write!(f, ","),
+            Token::LParen => write!(f, "("),
+            Token::RParen => write!(f, ")"),
+            Token::LBrace => write!(f, "{{"),
+            Token::RBrace => write!(f, "}}"),
+            Token::LBrack => write!(f, "["),
+            Token::RBrack => write!(f, "]"),
+            Token::Underscore => write!(f, "_"),
+            Token::Question => write!(f, "?"),
+            Token::Def => write!(f, "def"),
+            Token::Impl => write!(f, "impl"),
+            Token::Struct => write!(f, "struct"),
+            Token::Enum => write!(f, "enum"),
+            Token::Where => write!(f, "where"),
+            Token::Var => write!(f, "var"),
+            Token::Type => write!(f, "type"),
+            Token::From => write!(f, "from"),
+            Token::Into => write!(f, "into"),
+            Token::Select => write!(f, "select"),
+            Token::True => write!(f, "true"),
+            Token::False => write!(f, "false"),
+            Token::Code(s) => write!(f, "{s}"),
+            Token::Name(s) => write!(f, "{s}"),
+            Token::Int(s) => write!(f, "{s}"),
+            Token::Float(s) => write!(f, "{s}"),
+            Token::String(s) => write!(f, "{s}"),
+            Token::Char(s) => write!(f, "{s}"),
+            Token::Err => write!(f, "<err>"),
+            Token::Eof => write!(f, "<eof>"),
         }
     }
 }
 
-impl std::ops::Index<Span> for str {
-    type Output = str;
+#[derive(Eq, Clone, Copy, Hash)]
+pub enum Span {
+    Source(u16, u32, u32),
+    Builtin,
+}
 
-    fn index(&self, index: Span) -> &Self::Output {
-        &self[Range::<usize>::from(index)]
+impl std::fmt::Debug for Span {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Span::Source(file, start, end) => write!(f, "{:?}:{}-{}", file, start, end),
+            Span::Builtin => write!(f, "<builtin>"),
+        }
+    }
+}
+
+impl PartialEq for Span {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Span::Source(f0, s0, e0), Span::Source(f1, s1, e1)) => {
+                f0 == f1 && s0 == s1 && e0 == e1
+            }
+            (Span::Builtin, _) | (_, Span::Builtin) => true,
+        }
+    }
+}
+
+impl Default for Span {
+    fn default() -> Self {
+        Span::Builtin
+    }
+}
+
+impl Span {
+    pub fn new(file: u16, start: u32, end: u32) -> Span {
+        Span::Source(file, start, end)
+    }
+
+    pub fn file(&self) -> &u16 {
+        match self {
+            Span::Source(file, _, _) => file,
+            Span::Builtin => unreachable!(),
+        }
+    }
+
+    pub fn start(&self) -> &u32 {
+        match self {
+            Span::Source(_, start, _) => start,
+            Span::Builtin => unreachable!(),
+        }
+    }
+
+    pub fn end(&self) -> &u32 {
+        match self {
+            Span::Source(_, _, end) => end,
+            Span::Builtin => unreachable!(),
+        }
+    }
+}
+
+impl std::ops::Add<Span> for Span {
+    type Output = Span;
+
+    fn add(self, other: Span) -> Self::Output {
+        match (self, other) {
+            (Span::Builtin, Span::Builtin) => Span::Builtin,
+            (Span::Builtin, Span::Source(file, start, end)) => Span::new(file, start, end),
+            (Span::Source(file, start, end), Span::Builtin) => Span::new(file, start, end),
+            (Span::Source(file, start, _), Span::Source(_, _, end)) => Span::new(file, start, end),
+        }
     }
 }
 
 pub struct Lexer<'a> {
     input: &'a str,
     pos: usize,
+    eof: bool,
+    file: u16,
+    pub diags: Diags,
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(input: &'a str) -> Lexer {
-        Lexer { input, pos: 0 }
+    pub fn new(file: u16, input: &'a str) -> Lexer<'a> {
+        Lexer {
+            file,
+            input,
+            eof: false,
+            pos: 0,
+            diags: Diags::new(),
+        }
     }
-}
 
-impl<'a> Iterator for Lexer<'a> {
-    type Item = (Span, Token<'a>);
-
-    fn next(&mut self) -> Option<Self::Item> {
+    pub fn lex(&mut self) -> Option<(Span, Token<'a>)> {
         loop {
             let start = self.pos;
             let mut chars = self.input[self.pos..].chars();
@@ -148,7 +221,10 @@ impl<'a> Iterator for Lexer<'a> {
                         }
                     }
                     if self.pos - start == 1 && c == '_' {
-                        return Some((Span::from(start..self.pos), Token::Underscore));
+                        return Some((
+                            Span::new(self.file, start as u32, self.pos as u32),
+                            Token::Underscore,
+                        ));
                     }
 
                     match &self.input[start..self.pos] {
@@ -182,7 +258,10 @@ impl<'a> Iterator for Lexer<'a> {
                                     }
                                 }
                                 let s = &self.input[start..self.pos];
-                                return Some((Span::from(start..self.pos), Token::Float(s)));
+                                return Some((
+                                    Span::new(self.file, start as u32, self.pos as u32),
+                                    Token::Float(s),
+                                ));
                             }
                             break;
                         }
@@ -194,27 +273,30 @@ impl<'a> Iterator for Lexer<'a> {
                 '"' => {
                     while let Some(c) = chars.next() {
                         self.pos += c.len_utf8();
+                        if c == '\\' {
+                            let c = chars.next()?;
+                            self.pos += c.len_utf8();
+                        }
                         if c == '"' {
                             break;
                         }
                     }
-
-                    let s = &self.input[start + 1..self.pos - 1];
-                    Token::String(s)
+                    Token::String(&self.input[start + 1..self.pos - 1])
                 }
                 '\'' => {
-                    while let Some(c) = chars.next() {
+                    let c = chars.next()?;
+                    self.pos += c.len_utf8();
+                    if c == '\\' {
+                        let c = chars.next()?;
                         self.pos += c.len_utf8();
-                        if c == '\'' {
-                            break;
-                        }
                     }
-
-                    let s = &self.input[start + 1..self.pos - 1];
-                    if s.len() != 1 {
+                    let c = chars.next()?;
+                    self.pos += c.len_utf8();
+                    if c == '\'' {
+                        Token::Char(&self.input[start + 1..self.pos - 1])
+                    } else {
                         return None;
                     }
-                    Token::Char(s.chars().next().unwrap())
                 }
                 '(' => Token::LParen,
                 ')' => Token::RParen,
@@ -292,10 +374,34 @@ impl<'a> Iterator for Lexer<'a> {
                 '*' => Token::Star,
                 '/' => Token::Slash,
                 '?' => Token::Question,
-                _ => Token::Err,
+                t => {
+                    self.diags.err(
+                        Span::new(self.file, start as u32, self.pos as u32),
+                        "Unexpected character",
+                        format!("Unexpected character '{t}'"),
+                    );
+                    Token::Err
+                }
             };
-
-            return Some((Span::from(start..self.pos), token));
+            return Some((Span::new(self.file, start as u32, self.pos as u32), token));
         }
+    }
+}
+
+impl<'a> Iterator for Lexer<'a> {
+    type Item = (Span, Token<'a>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.lex().or_else(|| {
+            if self.eof {
+                return None;
+            } else {
+                self.eof = true;
+                Some((
+                    Span::new(self.file, self.pos as u32, self.pos as u32),
+                    Token::Eof,
+                ))
+            }
+        })
     }
 }

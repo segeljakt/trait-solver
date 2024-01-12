@@ -1,9 +1,10 @@
 mod util;
 
-use aqua::data::Expr;
-use aqua::data::Program;
-use aqua::data::StmtImpl;
-use aqua::data::Type;
+use crate::util::float;
+use aqua::ast::Expr;
+use aqua::ast::Program;
+use aqua::ast::StmtImpl;
+use aqua::ast::Type;
 use aqua::diag::Sources;
 use aqua::lexer::Lexer;
 use aqua::parser::Parser;
@@ -32,7 +33,6 @@ use util::tr;
 use util::type_assoc;
 use util::unit;
 use util::variant;
-use crate::util::float;
 
 #[test]
 fn test_parser_int0() {
@@ -57,30 +57,67 @@ fn test_parser_float0() {
 
 #[test]
 fn test_parser_binop0() {
-    let p0 = Program::parse("1 + 2;");
-    let p1 = program([stmt_expr(binop(int("1"), "__add__", int("2")))]);
+    let p0 = Expr::parse("1 + 2");
+    let p1 = binop(int("1"), "__add__", int("2"));
+    assert_eq!(p0, p1);
+    let p0 = Expr::parse("1 - 2");
+    let p1 = binop(int("1"), "__sub__", int("2"));
+    assert_eq!(p0, p1);
+    let p0 = Expr::parse("1 * 2");
+    let p1 = binop(int("1"), "__mul__", int("2"));
+    assert_eq!(p0, p1);
+    let p0 = Expr::parse("1 / 2");
+    let p1 = binop(int("1"), "__div__", int("2"));
     assert_eq!(p0, p1);
 }
 
 #[test]
 fn test_parser_binop1() {
-    let p0 = Program::parse("1 + 2 * 3;");
-    let p1 = program([stmt_expr(binop(
-        int("1"),
-        "__add__",
-        binop(int("2"), "__mul__", int("3")),
-    ))]);
+    let p0 = Expr::parse("1 + 2 * 3");
+    let p1 = binop(int("1"), "__add__", binop(int("2"), "__mul__", int("3")));
+    assert_eq!(p0, p1);
+    let p0 = Expr::parse("1 * 2 + 3");
+    let p1 = binop(binop(int("1"), "__mul__", int("2")), "__add__", int("3"));
+    assert_eq!(p0, p1);
+    let p0 = Expr::parse("1 + 2 / 3");
+    let p1 = binop(int("1"), "__add__", binop(int("2"), "__div__", int("3")));
+    assert_eq!(p0, p1);
+    let p0 = Expr::parse("1 / 2 + 3");
+    let p1 = binop(binop(int("1"), "__div__", int("2")), "__add__", int("3"));
+    assert_eq!(p0, p1);
+    let p0 = Expr::parse("1 * 2 / 3");
+    let p1 = binop(binop(int("1"), "__mul__", int("2")), "__div__", int("3"));
     assert_eq!(p0, p1);
 }
 
 #[test]
-fn test_parser_binop2() {
-    let p0 = Program::parse("1 * 2 + 3;");
-    let p1 = program([stmt_expr(binop(
-        binop(int("1"), "__mul__", int("2")),
-        "__add__",
-        int("3"),
-    ))]);
+fn test_parser_unop2() {}
+
+#[test]
+fn test_method_call0() {
+    let p0 = Expr::parse("1.foo()");
+    let p1 = call(ev("foo"), [int("1")]);
+    assert_eq!(p0, p1);
+}
+
+#[test]
+fn test_method_call1() {
+    let p0 = Expr::parse("1.foo(2)");
+    let p1 = call(ev("foo"), [int("1"), int("2")]);
+    assert_eq!(p0, p1);
+}
+
+#[test]
+fn test_method_call1a() {
+    let p0 = Expr::parse("1.foo(2,)");
+    let p1 = call(ev("foo"), [int("1"), int("2")]);
+    assert_eq!(p0, p1);
+}
+
+#[test]
+fn test_method_call2() {
+    let p0 = Expr::parse("1.foo(2, 3)");
+    let p1 = call(ev("foo"), [int("1"), int("2"), int("3")]);
     assert_eq!(p0, p1);
 }
 
@@ -509,6 +546,67 @@ fn test_parser_generics2() {
 fn test_parser_generics3() {
     let p0 = Program::parse("def f[T, U](): i32 = 1;");
     let p1 = program([stmt_def("f", ["T", "U"], [], [], t("i32"), int("1"))]);
+    assert_eq!(p0, p1);
+}
+
+#[test]
+fn test_parser_where0() {
+    let p0 = Program::parse("def x(): i32 where = 1;");
+    let p1 = program([stmt_def("x", [], [], [], t("i32"), int("1"))]);
+    assert_eq!(p0, p1);
+}
+
+#[test]
+fn test_parser_where1() {
+    let p0 = Program::parse("def x(): i32 where Clone[i32] = 1;");
+    let p1 = program([stmt_def(
+        "x",
+        [],
+        [tr("Clone", [t("i32")], [])],
+        [],
+        t("i32"),
+        int("1"),
+    )]);
+    assert_eq!(p0, p1);
+}
+
+#[test]
+fn test_parser_where2() {
+    let p0 = Program::parse("def x(): i32 where Clone[i32], Copy[i32] = 1;");
+    let p1 = program([stmt_def(
+        "x",
+        [],
+        [tr("Clone", [t("i32")], []), tr("Copy", [t("i32")], [])],
+        [],
+        t("i32"),
+        int("1"),
+    )]);
+    assert_eq!(p0, p1);
+}
+
+#[test]
+fn test_parser_where3() {
+    let p0 = Program::parse("def x(): i32 where Clone[i32], Copy[i32], = 1;");
+    let p1 = program([stmt_def(
+        "x",
+        [],
+        [tr("Clone", [t("i32")], []), tr("Copy", [t("i32")], [])],
+        [],
+        t("i32"),
+        int("1"),
+    )]);
+    assert_eq!(p0, p1);
+}
+
+#[test]
+fn test_parser_where4() {
+    let p0 = Program::parse("impl Copy[i32] where Clone[i32] {}");
+    let p1 = program([stmt_impl(
+        [],
+        tr("Copy", [t("i32")], []),
+        [tr("Clone", [t("i32")], [])],
+        [],
+    )]);
     assert_eq!(p0, p1);
 }
 

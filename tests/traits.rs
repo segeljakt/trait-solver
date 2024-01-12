@@ -1,6 +1,6 @@
-use aqua::data::StmtImpl;
-use aqua::data::Trait;
-use aqua::data::Type;
+use aqua::ast::StmtImpl;
+use aqua::ast::Trait;
+use aqua::ast::Type;
 use aqua::infer::Context;
 use aqua::solve;
 use aqua::unify;
@@ -51,6 +51,18 @@ fn test_trait4() {
     let goal = Trait::parse("Clone[Vec[Vec[i32]]]");
 
     let mut ctx = Context::new();
+
+    // Types:  propositions
+    // Traits: predicates   Trait[Type, Type, ...]
+    // Rule: Trait[Type, Type, ...] :- Trait[Type, Type, ...],
+    //                                 Trait[Type, Type, ...],
+    //                                 Trait[Type, Type, ...].
+    //
+    // Clone[Vec[Vec[i32]]] :- Clone[Vec[i32]].
+    // Clone[Vec[i32]] :- Clone[i32].
+    // Clone[i32].
+    //
+    //
 
     assert!(solve(&goal, &impls, &[], &mut sub, &mut ctx).is_some());
 }

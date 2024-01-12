@@ -1,5 +1,5 @@
-use crate::data::StmtDef;
-use crate::data::StmtImpl;
+use crate::ast::StmtDef;
+use crate::ast::StmtImpl;
 use crate::infer::Context;
 
 pub fn instantiate_impl(imp: &StmtImpl, ctx: &mut Context) -> StmtImpl {

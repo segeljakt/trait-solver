@@ -3,5 +3,13 @@ name = "aqua"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "aqua"
+path = "src/main.rs"
+
 [dependencies]
 ariadne = "0.4.0"
+# clap = { version = "4.4.16", features = ["derive", "string"] }
+#
+# [build-dependencies]
+# built = { version = "0.7.1", features = ["chrono"] }

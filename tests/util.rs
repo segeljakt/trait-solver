@@ -1,17 +1,17 @@
 #![allow(unused)]
 
-use aqua::data::Expr;
-use aqua::data::Name;
-use aqua::data::Param;
-use aqua::data::Program;
-use aqua::data::Stmt;
-use aqua::data::StmtDef;
-use aqua::data::StmtEnum;
-use aqua::data::StmtImpl;
-use aqua::data::StmtStruct;
-use aqua::data::StmtVar;
-use aqua::data::Trait;
-use aqua::data::Type;
+use aqua::ast::Expr;
+use aqua::ast::Name;
+use aqua::ast::Param;
+use aqua::ast::Program;
+use aqua::ast::Stmt;
+use aqua::ast::StmtDef;
+use aqua::ast::StmtEnum;
+use aqua::ast::StmtImpl;
+use aqua::ast::StmtStruct;
+use aqua::ast::StmtVar;
+use aqua::ast::Trait;
+use aqua::ast::Type;
 use aqua::lexer::Span;
 
 pub fn program<const N: usize>(ss: [Stmt; N]) -> Program {

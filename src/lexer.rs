@@ -5,6 +5,7 @@ pub enum Token<'a> {
     // Punctuations
     Eq,
     EqEq,
+    Bang,
     BangEq,
     LAngle,
     LAngleEq,
@@ -17,6 +18,8 @@ pub enum Token<'a> {
     Dot,
     DotDot,
     Colon,
+    ColonColon,
+    AtSign,
     SemiColon,
     Comma,
     LParen,
@@ -27,19 +30,36 @@ pub enum Token<'a> {
     RBrack,
     Underscore,
     Question,
+    Arrow,
     // Keywords
+    And,
+    Break,
+    Continue,
     Def,
-    Impl,
-    Struct,
+    Else,
     Enum,
-    Where,
-    Var,
-    Type,
-    From,
-    Into,
-    Select,
-    True,
     False,
+    For,
+    From,
+    Group,
+    If,
+    Impl,
+    In,
+    Into,
+    Join,
+    Match,
+    On,
+    Or,
+    Over,
+    Return,
+    Select,
+    Struct,
+    True,
+    Type,
+    Var,
+    Where,
+    While,
+    With,
     // Literals
     Code(&'a str),
     Name(&'a str),
@@ -50,6 +70,7 @@ pub enum Token<'a> {
     // Special
     Err,
     Eof,
+    Fun,
 }
 
 impl<'a> std::fmt::Display for Token<'a> {
@@ -57,6 +78,7 @@ impl<'a> std::fmt::Display for Token<'a> {
         match self {
             Token::Eq => write!(f, "="),
             Token::EqEq => write!(f, "=="),
+            Token::Bang => write!(f, "!"),
             Token::BangEq => write!(f, "!="),
             Token::LAngle => write!(f, "<"),
             Token::LAngleEq => write!(f, "<="),
@@ -64,11 +86,13 @@ impl<'a> std::fmt::Display for Token<'a> {
             Token::RAngleEq => write!(f, ">="),
             Token::Plus => write!(f, "+"),
             Token::Minus => write!(f, "-"),
+            Token::AtSign => write!(f, "@"),
             Token::Star => write!(f, "*"),
             Token::Slash => write!(f, "/"),
             Token::Dot => write!(f, "."),
             Token::DotDot => write!(f, ".."),
             Token::Colon => write!(f, ":"),
+            Token::ColonColon => write!(f, "::"),
             Token::SemiColon => write!(f, ";"),
             Token::Comma => write!(f, ","),
             Token::LParen => write!(f, "("),
@@ -79,18 +103,36 @@ impl<'a> std::fmt::Display for Token<'a> {
             Token::RBrack => write!(f, "]"),
             Token::Underscore => write!(f, "_"),
             Token::Question => write!(f, "?"),
+            Token::Arrow => write!(f, "=>"),
+            Token::And => write!(f, "and"),
+            Token::Break => write!(f, "break"),
+            Token::Continue => write!(f, "continue"),
             Token::Def => write!(f, "def"),
-            Token::Impl => write!(f, "impl"),
-            Token::Struct => write!(f, "struct"),
+            Token::Else => write!(f, "else"),
             Token::Enum => write!(f, "enum"),
-            Token::Where => write!(f, "where"),
-            Token::Var => write!(f, "var"),
-            Token::Type => write!(f, "type"),
-            Token::From => write!(f, "from"),
-            Token::Into => write!(f, "into"),
-            Token::Select => write!(f, "select"),
-            Token::True => write!(f, "true"),
             Token::False => write!(f, "false"),
+            Token::For => write!(f, "for"),
+            Token::From => write!(f, "from"),
+            Token::Group => write!(f, "group"),
+            Token::If => write!(f, "if"),
+            Token::Impl => write!(f, "impl"),
+            Token::In => write!(f, "in"),
+            Token::Into => write!(f, "into"),
+            Token::Match => write!(f, "match"),
+            Token::On => write!(f, "on"),
+            Token::Or => write!(f, "or"),
+            Token::Over => write!(f, "over"),
+            Token::Return => write!(f, "return"),
+            Token::Select => write!(f, "select"),
+            Token::Struct => write!(f, "struct"),
+            Token::True => write!(f, "true"),
+            Token::Type => write!(f, "type"),
+            Token::Var => write!(f, "var"),
+            Token::Where => write!(f, "where"),
+            Token::While => write!(f, "while"),
+            Token::With => write!(f, "with"),
+            Token::Join => write!(f, "join"),
+            Token::Fun => write!(f, "fun"),
             Token::Code(s) => write!(f, "{s}"),
             Token::Name(s) => write!(f, "{s}"),
             Token::Int(s) => write!(f, "{s}"),
@@ -106,14 +148,23 @@ impl<'a> std::fmt::Display for Token<'a> {
 #[derive(Eq, Clone, Copy, Hash)]
 pub enum Span {
     Source(u16, u32, u32),
-    Builtin,
+    Generated,
 }
 
 impl std::fmt::Debug for Span {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Span::Source(file, start, end) => write!(f, "{file}:{start}..{end}"),
+            Span::Generated => write!(f, "..."),
+        }
+    }
+}
+
+impl std::fmt::Display for Span {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
             Span::Source(file, start, end) => write!(f, "{:?}:{}-{}", file, start, end),
-            Span::Builtin => write!(f, "<builtin>"),
+            Span::Generated => write!(f, "<builtin>"),
         }
     }
 }
@@ -124,40 +175,40 @@ impl PartialEq for Span {
             (Span::Source(f0, s0, e0), Span::Source(f1, s1, e1)) => {
                 f0 == f1 && s0 == s1 && e0 == e1
             }
-            (Span::Builtin, _) | (_, Span::Builtin) => true,
+            (Span::Generated, _) | (_, Span::Generated) => true,
         }
     }
 }
 
 impl Default for Span {
     fn default() -> Self {
-        Span::Builtin
+        Span::Generated
     }
 }
 
 impl Span {
-    pub fn new(file: u16, start: u32, end: u32) -> Span {
-        Span::Source(file, start, end)
+    pub fn new(file: u16, range: std::ops::Range<u32>) -> Span {
+        Span::Source(file, range.start, range.end)
     }
 
     pub fn file(&self) -> &u16 {
         match self {
             Span::Source(file, _, _) => file,
-            Span::Builtin => unreachable!(),
+            Span::Generated => unreachable!(),
         }
     }
 
     pub fn start(&self) -> &u32 {
         match self {
             Span::Source(_, start, _) => start,
-            Span::Builtin => unreachable!(),
+            Span::Generated => unreachable!(),
         }
     }
 
     pub fn end(&self) -> &u32 {
         match self {
             Span::Source(_, _, end) => end,
-            Span::Builtin => unreachable!(),
+            Span::Generated => unreachable!(),
         }
     }
 }
@@ -167,10 +218,10 @@ impl std::ops::Add<Span> for Span {
 
     fn add(self, other: Span) -> Self::Output {
         match (self, other) {
-            (Span::Builtin, Span::Builtin) => Span::Builtin,
-            (Span::Builtin, Span::Source(file, start, end)) => Span::new(file, start, end),
-            (Span::Source(file, start, end), Span::Builtin) => Span::new(file, start, end),
-            (Span::Source(file, start, _), Span::Source(_, _, end)) => Span::new(file, start, end),
+            (Span::Generated, Span::Generated) => Span::Generated,
+            (Span::Generated, Span::Source(file, start, end)) => Span::new(file, start..end),
+            (Span::Source(file, start, end), Span::Generated) => Span::new(file, start..end),
+            (Span::Source(file, start, _), Span::Source(_, _, end)) => Span::new(file, start..end),
         }
     }
 }
@@ -222,48 +273,79 @@ impl<'a> Lexer<'a> {
                     }
                     if self.pos - start == 1 && c == '_' {
                         return Some((
-                            Span::new(self.file, start as u32, self.pos as u32),
+                            Span::new(self.file, start as u32..self.pos as u32),
                             Token::Underscore,
                         ));
                     }
 
                     match &self.input[start..self.pos] {
+                        "and" => Token::And,
+                        "break" => Token::Break,
+                        "continue" => Token::Continue,
                         "def" => Token::Def,
-                        "impl" => Token::Impl,
-                        "where" => Token::Where,
-                        "var" => Token::Var,
-                        "true" => Token::True,
-                        "false" => Token::False,
-                        "type" => Token::Type,
-                        "from" => Token::From,
-                        "into" => Token::Into,
-                        "select" => Token::Select,
+                        "else" => Token::Else,
                         "enum" => Token::Enum,
+                        "false" => Token::False,
+                        "for" => Token::For,
+                        "from" => Token::From,
+                        "group" => Token::Group,
+                        "if" => Token::If,
+                        "impl" => Token::Impl,
+                        "in" => Token::In,
+                        "into" => Token::Into,
+                        "join" => Token::Join,
+                        "match" => Token::Match,
+                        "on" => Token::On,
+                        "or" => Token::Or,
+                        "over" => Token::Over,
+                        "return" => Token::Return,
+                        "select" => Token::Select,
                         "struct" => Token::Struct,
+                        "true" => Token::True,
+                        "type" => Token::Type,
+                        "var" => Token::Var,
+                        "where" => Token::Where,
+                        "while" => Token::While,
+                        "with" => Token::With,
+                        "fun" => Token::Fun,
                         s => Token::Name(s),
                     }
                 }
                 '0'..='9' => {
                     while let Some(c) = chars.next() {
-                        if c.is_numeric() {
-                            self.pos += c.len_utf8();
-                        } else {
-                            if c == '.' {
-                                self.pos += c.len_utf8();
-                                while let Some(c) = chars.next() {
-                                    if c.is_numeric() {
-                                        self.pos += c.len_utf8();
-                                    } else {
-                                        break;
-                                    }
+                        match c {
+                            c if c.is_numeric() => self.pos += c.len_utf8(),
+                            '.' => match chars.next() {
+                                Some(c) if c.is_alphabetic() => {
+                                    return Some((
+                                        Span::new(self.file, start as u32..self.pos as u32),
+                                        Token::Int(&self.input[start..self.pos]),
+                                    ));
                                 }
-                                let s = &self.input[start..self.pos];
-                                return Some((
-                                    Span::new(self.file, start as u32, self.pos as u32),
-                                    Token::Float(s),
-                                ));
-                            }
-                            break;
+                                Some(c) if c.is_numeric() => {
+                                    self.pos += '.'.len_utf8();
+                                    self.pos += c.len_utf8();
+                                    while let Some(c) = chars.next() {
+                                        if c.is_numeric() {
+                                            self.pos += c.len_utf8();
+                                        } else {
+                                            break;
+                                        }
+                                    }
+                                    return Some((
+                                        Span::new(self.file, start as u32..self.pos as u32),
+                                        Token::Float(&self.input[start..self.pos]),
+                                    ));
+                                }
+                                _ => {
+                                    self.pos += '.'.len_utf8();
+                                    return Some((
+                                        Span::new(self.file, start as u32..self.pos as u32),
+                                        Token::Float(&self.input[start..self.pos]),
+                                    ));
+                                }
+                            },
+                            _ => break,
                         }
                     }
 
@@ -281,7 +363,8 @@ impl<'a> Lexer<'a> {
                             break;
                         }
                     }
-                    Token::String(&self.input[start + 1..self.pos - 1])
+                    let l = '"'.len_utf8();
+                    Token::String(&self.input[start + l..self.pos - l])
                 }
                 '\'' => {
                     let c = chars.next()?;
@@ -293,7 +376,8 @@ impl<'a> Lexer<'a> {
                     let c = chars.next()?;
                     self.pos += c.len_utf8();
                     if c == '\'' {
-                        Token::Char(&self.input[start + 1..self.pos - 1])
+                        let l = '\''.len_utf8();
+                        Token::Char(&self.input[start + l..self.pos - l])
                     } else {
                         return None;
                     }
@@ -304,26 +388,36 @@ impl<'a> Lexer<'a> {
                 '}' => Token::RBrace,
                 '[' => Token::LBrack,
                 ']' => Token::RBrack,
-                '=' => {
-                    if let Some('=') = chars.next() {
-                        self.pos += 1;
+                '=' => match chars.next() {
+                    Some('=') => {
+                        self.pos += '='.len_utf8();
                         Token::EqEq
+                    }
+                    Some('>') => {
+                        self.pos += '>'.len_utf8();
+                        Token::Arrow
+                    }
+                    _ => Token::Eq,
+                },
+                ':' => {
+                    if let Some(':') = chars.next() {
+                        self.pos += ':'.len_utf8();
+                        Token::ColonColon
                     } else {
-                        Token::Eq
+                        Token::Colon
                     }
                 }
-                ':' => Token::Colon,
                 '!' => {
                     if let Some('=') = chars.next() {
-                        self.pos += 1;
+                        self.pos += '='.len_utf8();
                         Token::BangEq
                     } else {
-                        return None;
+                        Token::Bang
                     }
                 }
                 '<' => {
                     if let Some('=') = chars.next() {
-                        self.pos += 1;
+                        self.pos += '='.len_utf8();
                         Token::LAngleEq
                     } else {
                         Token::LAngle
@@ -331,7 +425,7 @@ impl<'a> Lexer<'a> {
                 }
                 '>' => {
                     if let Some('=') = chars.next() {
-                        self.pos += 1;
+                        self.pos += '='.len_utf8();
                         Token::RAngleEq
                     } else {
                         Token::RAngle
@@ -339,7 +433,7 @@ impl<'a> Lexer<'a> {
                 }
                 '.' => {
                     if let Some('.') = chars.next() {
-                        self.pos += 1;
+                        self.pos += '.'.len_utf8();
                         Token::DotDot
                     } else {
                         Token::Dot
@@ -349,24 +443,23 @@ impl<'a> Lexer<'a> {
                 ',' => Token::Comma,
                 '+' => Token::Plus,
                 '-' => {
-                    if let Some('-') = chars.next() {
-                        if let Some('-') = chars.next() {
-                            self.pos += 2;
-                            while let Some(c) = chars.next() {
+                    if let (Some('-'), Some('-')) = (chars.next(), chars.next()) {
+                        self.pos += '-'.len_utf8() * 2;
+                        loop {
+                            if let Some(c) = chars.next() {
                                 self.pos += c.len_utf8();
                                 if c == '-' {
-                                    if let Some('-') = chars.next() {
-                                        if let Some('-') = chars.next() {
-                                            self.pos += 2;
-                                            break;
-                                        }
+                                    if let (Some('-'), Some('-')) = (chars.next(), chars.next()) {
+                                        self.pos += '-'.len_utf8() * 2;
+                                        break;
                                     }
                                 }
+                            } else {
+                                return None;
                             }
-                            Token::Code(&self.input[start + 3..self.pos - 3])
-                        } else {
-                            Token::Minus
                         }
+                        let l = '-'.len_utf8() * 3;
+                        Token::Code(&self.input[start + l..self.pos - l])
                     } else {
                         Token::Minus
                     }
@@ -374,16 +467,17 @@ impl<'a> Lexer<'a> {
                 '*' => Token::Star,
                 '/' => Token::Slash,
                 '?' => Token::Question,
+                '@' => Token::AtSign,
                 t => {
                     self.diags.err(
-                        Span::new(self.file, start as u32, self.pos as u32),
+                        Span::new(self.file, start as u32..self.pos as u32),
                         "Unexpected character",
                         format!("Unexpected character '{t}'"),
                     );
                     Token::Err
                 }
             };
-            return Some((Span::new(self.file, start as u32, self.pos as u32), token));
+            return Some((Span::new(self.file, start as u32..self.pos as u32), token));
         }
     }
 }
@@ -398,7 +492,7 @@ impl<'a> Iterator for Lexer<'a> {
             } else {
                 self.eof = true;
                 Some((
-                    Span::new(self.file, self.pos as u32, self.pos as u32),
+                    Span::new(self.file, self.pos as u32..self.pos as u32),
                     Token::Eof,
                 ))
             }

@@ -1,6 +1,6 @@
 pub mod annotate;
 pub mod apply;
-pub mod data;
+pub mod ast;
 pub mod diag;
 pub mod display;
 pub mod helper;
@@ -9,25 +9,25 @@ pub mod instantiate;
 pub mod lexer;
 pub mod parser;
 
-use data::Candidate;
-use data::Name;
-use data::StmtImpl;
-use data::Trait;
-use data::Type;
+use ast::Candidate;
+use ast::Name;
+use ast::StmtImpl;
+use ast::Trait;
+use ast::Type;
 use infer::Context;
 use instantiate::instantiate_impl;
 
 pub fn solve(
     goal: &Trait,
     impls: &[StmtImpl],
-    preds: &[Trait],
+    where_clause: &[Trait],
     sub: &mut Vec<(Name, Type)>,
     ctx: &mut Context,
 ) -> Option<Candidate> {
     let mut solutions = vec![];
-    for p in preds {
-        if matches(sub, goal, p) {
-            solutions.push(Candidate::Pred(p.clone()));
+    for tr in where_clause {
+        if matches(sub, goal, tr) {
+            solutions.push(Candidate::Pred(tr.clone()));
         }
     }
     for i in impls {
@@ -36,17 +36,15 @@ pub fn solve(
         if matches(&mut sub, goal, &i.head) {
             if i.body
                 .iter()
-                .all(|subgoal| solve(subgoal, impls, preds, &mut sub, ctx).is_some())
+                .all(|subgoal| solve(subgoal, impls, where_clause, &mut sub, ctx).is_some())
             {
                 solutions.push(Candidate::Impl(i));
             }
         }
     }
+    // TODO: Return the current solutions
     match solutions.len() {
-        0 => {
-            // ctx.diags.err(, msg)
-            None
-        }
+        0 => None,
         1 => Some(solutions.pop().unwrap()),
         _ => None,
     }

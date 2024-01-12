@@ -1,14 +1,14 @@
-use crate::data::Expr;
-use crate::data::Param;
-use crate::data::Program;
-use crate::data::Stmt;
-use crate::data::StmtDef;
-use crate::data::StmtEnum;
-use crate::data::StmtImpl;
-use crate::data::StmtStruct;
-use crate::data::StmtVar;
-use crate::data::Trait;
-use crate::data::Type;
+use crate::ast::Expr;
+use crate::ast::Param;
+use crate::ast::Program;
+use crate::ast::Stmt;
+use crate::ast::StmtDef;
+use crate::ast::StmtEnum;
+use crate::ast::StmtImpl;
+use crate::ast::StmtStruct;
+use crate::ast::StmtVar;
+use crate::ast::Trait;
+use crate::ast::Type;
 use crate::infer::Context;
 
 // Replace all holes with fresh type variables.

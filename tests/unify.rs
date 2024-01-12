@@ -1,6 +1,6 @@
 mod util;
 
-use aqua::data::Type;
+use aqua::ast::Type;
 use aqua::unify;
 
 use crate::util::t;
@@ -12,6 +12,7 @@ fn test_unify_atom0() {
     let t0 = Type::parse("i32");
     let t1 = Type::parse("i32");
     assert!(unify(&mut substs, &t0, &t1).is_ok());
+    assert!(substs.is_empty());
 }
 
 #[test]
@@ -20,6 +21,7 @@ fn test_unify_atom1() {
     let t0 = Type::parse("i32");
     let t1 = Type::parse("i64");
     assert_eq!(unify(&mut substs, &t0, &t1), Err((t("i32"), t("i64"))));
+    assert!(substs.is_empty());
 }
 
 #[test]

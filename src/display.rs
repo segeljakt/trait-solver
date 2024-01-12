@@ -1,15 +1,15 @@
-use crate::data::Name;
-use crate::data::StmtDef;
-use crate::data::StmtEnum;
-use crate::data::Expr;
-use crate::data::StmtImpl;
-use crate::data::Param;
-use crate::data::Trait;
-use crate::data::Program;
-use crate::data::Stmt;
-use crate::data::StmtStruct;
-use crate::data::Type;
-use crate::data::StmtVar;
+use crate::ast::Name;
+use crate::ast::StmtDef;
+use crate::ast::StmtEnum;
+use crate::ast::Expr;
+use crate::ast::StmtImpl;
+use crate::ast::Param;
+use crate::ast::Trait;
+use crate::ast::Program;
+use crate::ast::Stmt;
+use crate::ast::StmtStruct;
+use crate::ast::Type;
+use crate::ast::StmtVar;
 
 macro_rules! fns {
     { $($arg:ty,)* } => {

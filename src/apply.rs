@@ -1,13 +1,13 @@
-use crate::data::Expr;
-use crate::data::Name;
-use crate::data::Param;
-use crate::data::Program;
-use crate::data::Stmt;
-use crate::data::StmtDef;
-use crate::data::StmtImpl;
-use crate::data::StmtVar;
-use crate::data::Trait;
-use crate::data::Type;
+use crate::ast::Expr;
+use crate::ast::Name;
+use crate::ast::Param;
+use crate::ast::Program;
+use crate::ast::Stmt;
+use crate::ast::StmtDef;
+use crate::ast::StmtImpl;
+use crate::ast::StmtVar;
+use crate::ast::Trait;
+use crate::ast::Type;
 
 impl Program {
     pub fn apply(&self, sub: &[(Name, Type)]) -> Program {

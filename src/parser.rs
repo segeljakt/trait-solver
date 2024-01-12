@@ -1,15 +1,15 @@
-use crate::data::Expr;
-use crate::data::Name;
-use crate::data::Param;
-use crate::data::Program;
-use crate::data::Stmt;
-use crate::data::StmtDef;
-use crate::data::StmtEnum;
-use crate::data::StmtImpl;
-use crate::data::StmtStruct;
-use crate::data::StmtVar;
-use crate::data::Trait;
-use crate::data::Type;
+use crate::ast::Expr;
+use crate::ast::Name;
+use crate::ast::Param;
+use crate::ast::Program;
+use crate::ast::Stmt;
+use crate::ast::StmtDef;
+use crate::ast::StmtEnum;
+use crate::ast::StmtImpl;
+use crate::ast::StmtStruct;
+use crate::ast::StmtVar;
+use crate::ast::Trait;
+use crate::ast::Type;
 use crate::diag::Diags;
 use crate::lexer::Lexer;
 use crate::lexer::Span;
@@ -258,7 +258,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn stmt_expr(&mut self) -> Option<Expr> {
-        let expr = self.expr(Self::expr3)?;
+        let expr = self.expr(Self::expr4)?;
         if !matches!(expr, Expr::Block(..)) {
             self.expect(Token::SemiColon)?;
         }
@@ -271,18 +271,16 @@ impl<'a> Parser<'a> {
         self.bind(name.clone(), Binding::ExprVar);
         self.scoped(|this| {
             let generics = this.generics()?;
-            println!("{:?}", generics);
             generics
                 .iter()
                 .for_each(|g| this.bind(g.clone(), Binding::TypeVar));
             let params = this.params()?;
-            println!("{:?}", params);
             params
                 .iter()
                 .for_each(|p| this.bind(p.name.clone(), Binding::ExprVar));
-            let trs = this.where_clause(Token::Colon)?;
             this.expect(Token::Colon)?;
             let ty = this.ty()?;
+            let trs = this.where_clause(Token::Eq)?;
             this.expect(Token::Eq)?;
             let expr = this.stmt_expr()?;
             Some(StmtDef::new(
@@ -402,7 +400,7 @@ impl<'a> Parser<'a> {
             Type::Hole
         };
         self.expect(Token::Eq)?;
-        let expr = self.expr(Self::expr3)?;
+        let expr = self.expr(Self::expr4)?;
         let s1 = self.expect(Token::SemiColon)?;
         self.bind(name.clone(), Binding::ExprVar);
         Some(StmtVar::new(s0 + s1, name, ty, expr))
@@ -420,35 +418,32 @@ impl<'a> Parser<'a> {
         Some(Trait::new(name.span, name, tys, assocs))
     }
 
-    fn sep<T>(
-        &mut self,
-        mut f: impl FnMut(&mut Self) -> Option<T>,
-        l: Token,
-        r: Token,
-    ) -> Option<Vec<T>> {
-        let _s0 = self.expect(l)?;
-        if let Some(_s1) = self.optional(r) {
+    fn until<T>(&mut self, mut f: impl FnMut(&mut Self) -> Option<T>, r: Token) -> Option<Vec<T>> {
+        if self.peek() == r {
             return Some(vec![]);
         } else {
             let mut xs = Vec::new();
             xs.push(f(self)?);
             while self.optional(Token::Comma).is_some() {
-                if let Some(_s1) = self.optional(r) {
+                if self.peek() == r {
                     return Some(xs);
                 } else {
                     xs.push(f(self)?);
                 }
             }
-            let _s1 = self.expect(r)?;
             Some(xs)
         }
     }
 
-    fn until<T>(&mut self, mut f: impl FnMut(&mut Self) -> Option<T>, r: Token) -> Option<Vec<T>> {
-        let mut xs = Vec::new();
-        while self.peek() != r {
-            xs.push(f(self)?);
-        }
+    fn sep<T>(
+        &mut self,
+        f: impl FnMut(&mut Self) -> Option<T>,
+        l: Token,
+        r: Token,
+    ) -> Option<Vec<T>> {
+        self.expect(l)?;
+        let xs = self.until(f, r)?;
+        self.expect(r)?;
         Some(xs)
     }
 
@@ -502,13 +497,14 @@ impl<'a> Parser<'a> {
 
     fn trait_args(&mut self) -> Option<(Vec<Type>, Vec<(Name, Type)>)> {
         if self.peek() == Token::LBrack {
+            self.next();
             let mut tys = Vec::new();
             let mut assocs = Vec::new();
-            self.sep(
+            self.until(
                 |this| this.ty_or_assoc(&mut tys, &mut assocs),
-                Token::LBrack,
                 Token::RBrack,
             )?;
+            self.expect(Token::RBrack)?;
             Some((tys, assocs))
         } else {
             Some((vec![], vec![]))
@@ -590,7 +586,7 @@ impl<'a> Parser<'a> {
                     let variant_name = self.name()?;
                     let expr = if self.peek() == Token::LParen {
                         let exprs =
-                            self.sep(|this| this.expr(Self::expr3), Token::LParen, Token::RParen)?;
+                            self.sep(|this| this.expr(Self::expr4), Token::LParen, Token::RParen)?;
                         if exprs.len() == 1 {
                             exprs.into_iter().next().unwrap()
                         } else {
@@ -657,13 +653,13 @@ impl<'a> Parser<'a> {
             if self.stack.lookup(&name).is_none() {
                 name.span = self.advance();
                 self.expect(Token::Colon)?;
-                return Some((name, self.expr(Self::expr3)?));
+                return Some((name, self.expr(Self::expr4)?));
             }
         }
-        match self.expr(Self::expr3) {
+        match self.expr(Self::expr4) {
             Some(Expr::Var(s, t, x)) => {
                 if self.expect(Token::Colon).is_some() {
-                    Some((x, self.expr(Self::expr3)?))
+                    Some((x, self.expr(Self::expr4)?))
                 } else {
                     Some((x.clone(), Expr::Var(s, t, x)))
                 }
@@ -698,7 +694,7 @@ impl<'a> Parser<'a> {
                         break Expr::Block(s0 + s1, Type::Hole, stmts, Box::new(expr));
                     }
                     _ => {
-                        let expr = this.expr(Self::expr3)?;
+                        let expr = this.expr(Self::expr4)?;
                         if let Expr::Block(..) = expr {
                             if let Token::RBrace = this.peek() {
                                 let s1 = this.advance();
@@ -755,7 +751,7 @@ impl<'a> Parser<'a> {
                 self.expr_name(name)
             }
             Token::LParen => {
-                let es = self.sep(|this| this.expr(Self::expr3), Token::LParen, Token::RParen)?;
+                let es = self.sep(|this| this.expr(Self::expr4), Token::LParen, Token::RParen)?;
                 match es.len() {
                     0 => Some(Expr::Unit(Span::default(), Type::Hole)),
                     1 => Some(es.into_iter().next().unwrap()),
@@ -767,19 +763,28 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn expr1(&mut self) -> Option<Expr> {
-        let mut expr = self.expr0()?;
+    fn expr2(&mut self) -> Option<Expr> {
+        let mut expr = self.expr(Self::expr0)?;
         loop {
             match self.peek() {
                 Token::LParen => {
                     let es =
-                        self.sep(|this| this.expr(Self::expr3), Token::LParen, Token::RParen)?;
+                        self.sep(|this| this.expr(Self::expr4), Token::LParen, Token::RParen)?;
                     expr = Expr::Call(expr.span(), Type::Hole, Box::new(expr), es);
                 }
                 Token::Dot => {
                     let s = self.advance();
                     let name = self.name()?;
-                    expr = Expr::Field(s, Type::Hole, Box::new(expr), name);
+                    if self.peek() == Token::LParen {
+                        let es =
+                            self.sep(|this| this.expr(Self::expr4), Token::LParen, Token::RParen)?;
+                        let span = expr.span() + name.span;
+                        let es = std::iter::once(expr).chain(es).collect::<Vec<_>>();
+                        let e1 = Expr::Var(name.span, Type::Hole, Name::from(name));
+                        expr = Expr::Call(span, Type::Hole, Box::new(e1), es);
+                    } else {
+                        expr = Expr::Field(s, Type::Hole, Box::new(expr), name);
+                    }
                 }
                 _ => break,
             }
@@ -787,13 +792,13 @@ impl<'a> Parser<'a> {
         Some(expr)
     }
 
-    fn expr2(&mut self) -> Option<Expr> {
-        let mut expr = self.expr1()?;
+    fn expr3(&mut self) -> Option<Expr> {
+        let mut expr = self.expr(Self::expr2)?;
         loop {
             match self.peek() {
                 Token::Star => {
                     let s = self.advance();
-                    let rhs = self.expr2()?;
+                    let rhs = self.expr(Self::expr2)?;
                     let fun = Expr::Var(s, Type::Hole, Name::from("__mul__"));
                     expr = Expr::Call(
                         expr.span() + rhs.span(),
@@ -804,7 +809,7 @@ impl<'a> Parser<'a> {
                 }
                 Token::Slash => {
                     let s = self.advance();
-                    let rhs = self.expr2()?;
+                    let rhs = self.expr(Self::expr2)?;
                     let fun = Expr::Var(s, Type::Hole, Name::from("__div__"));
                     expr = Expr::Call(
                         expr.span() + rhs.span(),
@@ -819,8 +824,8 @@ impl<'a> Parser<'a> {
         Some(expr)
     }
 
-    pub fn expr3(&mut self) -> Option<Expr> {
-        let mut expr = self.expr2()?;
+    pub fn expr4(&mut self) -> Option<Expr> {
+        let mut expr = self.expr(Self::expr3)?;
         loop {
             match self.peek() {
                 Token::Plus => {
@@ -860,7 +865,7 @@ impl Type {
 
 impl Expr {
     pub fn parse(s: &str) -> Expr {
-        Parser::new(Lexer::new(0, s)).expr(Parser::expr3).unwrap()
+        Parser::new(Lexer::new(0, s)).expr(Parser::expr4).unwrap()
     }
 }
 

@@ -1,6 +1,6 @@
 mod util;
 
-use aqua::data::Program;
+use aqua::ast::Program;
 use util::call;
 use util::ev;
 use util::int;

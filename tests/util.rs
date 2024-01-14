@@ -1,6 +1,7 @@
 #![allow(unused)]
 
 use aqua::ast::Expr;
+use aqua::ast::Index;
 use aqua::ast::Name;
 use aqua::ast::Param;
 use aqua::ast::Program;
@@ -12,6 +13,7 @@ use aqua::ast::StmtStruct;
 use aqua::ast::StmtVar;
 use aqua::ast::Trait;
 use aqua::ast::Type;
+use aqua::ast::Variant;
 use aqua::lexer::Span;
 
 pub fn program<const N: usize>(ss: [Stmt; N]) -> Program {
@@ -90,8 +92,14 @@ pub fn type_assoc(i: Trait, x: &'static str) -> Type {
     Type::assoc(i, x)
 }
 
-pub fn expr_assoc(i: Trait, x: &'static str) -> Expr {
-    Expr::Assoc(Span::default(), Type::Hole, i, Name::from(x))
+pub fn expr_assoc<const N: usize>(i: Trait, x: &'static str, ts: [Type; N]) -> Expr {
+    Expr::Assoc(
+        Span::default(),
+        Type::Hole,
+        i,
+        Name::from(x),
+        ts.into_iter().collect(),
+    )
 }
 
 pub fn stmt_var(x: &'static str, t: Type, e: Expr) -> Stmt {
@@ -119,6 +127,18 @@ pub fn expr_tuple<const N: usize>(es: [Expr; N]) -> Expr {
     Expr::Tuple(Span::default(), Type::Hole, es.into_iter().collect())
 }
 
+pub fn expr_array<const N: usize>(es: [Expr; N]) -> Expr {
+    Expr::Array(Span::default(), Type::Hole, es.into_iter().collect())
+}
+
+pub fn expr_index(e1: Expr, i: Index) -> Expr {
+    Expr::Index(Span::default(), Type::Hole, Box::new(e1), i)
+}
+
+pub fn index(i: &'static str) -> Index {
+    Index::new(Span::default(), i.parse().unwrap())
+}
+
 pub fn field(e: Expr, x: &'static str) -> Expr {
     Expr::Field(Span::default(), Type::Hole, Box::new(e), Name::from(x))
 }
@@ -141,10 +161,10 @@ pub fn stmt_def<const N: usize, const M: usize, const K: usize>(
     t: Type,
     e: Expr,
 ) -> Stmt {
-    def(x, gs, qs, ps, t, e).into()
+    impl_def(x, gs, qs, ps, t, e).into()
 }
 
-pub fn def<const N: usize, const M: usize, const K: usize>(
+pub fn impl_def<const N: usize, const M: usize, const K: usize>(
     x: &'static str,
     gs: [&'static str; N],
     qs: [Trait; M],
@@ -165,34 +185,32 @@ pub fn def<const N: usize, const M: usize, const K: usize>(
     )
 }
 
-pub fn stmt_struct<const N: usize, const M: usize, const K: usize>(
+pub fn stmt_struct<const N: usize, const M: usize>(
     x: &'static str,
     gs: [&'static str; N],
-    qs: [Trait; M],
-    ps: [(&'static str, Type); K],
+    ps: [(&'static str, Type); M],
 ) -> Stmt {
     StmtStruct::new(
         Span::default(),
         Name::from(x),
         gs.into_iter().map(Name::from).collect(),
-        qs.into_iter().collect(),
         ps.into_iter().map(|(s, t)| (Name::from(s), t)).collect(),
     )
     .into()
 }
 
-pub fn stmt_enum<const N: usize, const M: usize, const K: usize>(
+pub fn stmt_enum<const N: usize, const M: usize>(
     x: &'static str,
     gs: [&'static str; N],
-    qs: [Trait; M],
-    ps: [(&'static str, Type); K],
+    ps: [(&'static str, Type); M],
 ) -> Stmt {
     StmtEnum::new(
         Span::default(),
         Name::from(x),
         gs.into_iter().map(Name::from).collect(),
-        qs.into_iter().collect(),
-        ps.into_iter().map(|(s, t)| (Name::from(s), t)).collect(),
+        ps.into_iter()
+            .map(|(s, t)| Variant::new(Span::default(), Name::from(s), t))
+            .collect(),
     )
     .into()
 }
@@ -206,17 +224,84 @@ pub fn call<const N: usize>(e: Expr, es: [Expr; N]) -> Expr {
     )
 }
 
-pub fn binop(e0: Expr, op: &'static str, e1: Expr) -> Expr {
+pub fn binop(tr: &'static str, op: &'static str, e0: Expr, e1: Expr) -> Expr {
     Expr::Call(
         Span::default(),
         Type::Hole,
-        Box::new(Expr::Var(Span::default(), Type::Hole, Name::from(op))),
+        Box::new(Expr::Assoc(
+            Span::default(),
+            Type::Hole,
+            Trait::new(Span::default(), Name::from(tr), vec![], vec![]),
+            Name::from(op),
+            vec![],
+        )),
         [e0, e1].into_iter().collect(),
     )
 }
 
-pub fn ev(x: &'static str) -> Expr {
-    Expr::Var(Span::default(), Type::Hole, Name::from(x))
+pub fn add(e0: Expr, e1: Expr) -> Expr {
+    binop("Add", "add", e0, e1)
+}
+
+pub fn sub(e0: Expr, e1: Expr) -> Expr {
+    binop("Sub", "sub", e0, e1)
+}
+
+pub fn mul(e0: Expr, e1: Expr) -> Expr {
+    binop("Mul", "mul", e0, e1)
+}
+
+pub fn div(e0: Expr, e1: Expr) -> Expr {
+    binop("Div", "div", e0, e1)
+}
+
+pub fn eq(e0: Expr, e1: Expr) -> Expr {
+    binop("PartialEq", "eq", e0, e1)
+}
+
+pub fn ne(e0: Expr, e1: Expr) -> Expr {
+    binop("PartialEq", "ne", e0, e1)
+}
+
+pub fn lt(e0: Expr, e1: Expr) -> Expr {
+    binop("PartialOrd", "lt", e0, e1)
+}
+
+pub fn le(e0: Expr, e1: Expr) -> Expr {
+    binop("PartialOrd", "le", e0, e1)
+}
+
+pub fn gt(e0: Expr, e1: Expr) -> Expr {
+    binop("PartialOrd", "gt", e0, e1)
+}
+
+pub fn ge(e0: Expr, e1: Expr) -> Expr {
+    binop("PartialOrd", "ge", e0, e1)
+}
+
+pub fn and(e0: Expr, e1: Expr) -> Expr {
+    binop("Logic", "and", e0, e1)
+}
+
+pub fn or(e0: Expr, e1: Expr) -> Expr {
+    binop("Logic", "or", e0, e1)
+}
+
+pub fn get(e0: Expr, e1: Expr) -> Expr {
+    binop("Index", "get", e0, e1)
+}
+
+pub fn var(x: &'static str) -> Expr {
+    Expr::Var(Span::default(), Type::Hole, Name::from(x), vec![])
+}
+
+pub fn def<const N: usize>(x: &'static str, ts: [Type; N]) -> Expr {
+    Expr::Var(
+        Span::default(),
+        Type::Hole,
+        Name::from(x),
+        ts.into_iter().collect(),
+    )
 }
 
 pub fn int(i: &'static str) -> Expr {

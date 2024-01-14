@@ -2,7 +2,7 @@ mod util;
 
 use aqua::ast::Program;
 use util::call;
-use util::ev;
+use util::var;
 use util::int;
 use util::program;
 use util::stmt_def;
@@ -22,7 +22,7 @@ fn test_function0() {
 
     let tprog = program([
         stmt_def("f", [], [], [], t("i32"), int("0").with(t("i32"))).into(),
-        call(ev("f").with(tc("fun", [t("i32")])), [])
+        call(var("f").with(tc("fun", [t("i32")])), [])
             .with(t("i32"))
             .into(),
     ]);
@@ -50,8 +50,8 @@ fn test_function1() {
 //     );
 //     program([
 //         // fact([], p("Clone", [t("i32")], [])).into(),
-//         def("f", [], [], [("x", t("i32"))], t("i32"), ev("x")).into(),
-//         call(ev("f"), [int("0")]).into(),
+//         def("f", [], [], [("x", t("i32"))], t("i32"), var("x")).into(),
+//         call(var("f"), [int("0")]).into(),
 //     ]);
 //     assert!(prog.infer().is_ok())
 // }

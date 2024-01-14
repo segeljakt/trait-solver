@@ -52,18 +52,6 @@ fn test_trait4() {
 
     let mut ctx = Context::new();
 
-    // Types:  propositions
-    // Traits: predicates   Trait[Type, Type, ...]
-    // Rule: Trait[Type, Type, ...] :- Trait[Type, Type, ...],
-    //                                 Trait[Type, Type, ...],
-    //                                 Trait[Type, Type, ...].
-    //
-    // Clone[Vec[Vec[i32]]] :- Clone[Vec[i32]].
-    // Clone[Vec[i32]] :- Clone[i32].
-    // Clone[i32].
-    //
-    //
-
     assert!(solve(&goal, &impls, &[], &mut sub, &mut ctx).is_some());
 }
 

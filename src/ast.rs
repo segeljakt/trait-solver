@@ -40,6 +40,12 @@ impl Name {
     }
 }
 
+impl Index {
+    pub fn new(span: Span, index: usize) -> Index {
+        Index { span, index }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Program {
     pub stmts: Vec<Stmt>,
@@ -70,8 +76,8 @@ impl PartialEq for StmtImpl {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StmtTrait {
     pub span: Span,
+    pub name: Name,
     pub generics: Vec<Name>,
-    pub head: Trait,
     pub body: Vec<Trait>,
     pub defs: Vec<StmtDef>,
     pub assocs: Vec<(Name, Type)>,
@@ -115,9 +121,11 @@ pub enum Candidate {
 pub enum Stmt {
     Var(StmtVar),
     Def(StmtDef),
+    Trait(StmtTrait),
     Impl(StmtImpl),
     Struct(StmtStruct),
     Enum(StmtEnum),
+    Type(StmtType),
     Expr(Expr),
 }
 
@@ -145,7 +153,6 @@ pub struct StmtStruct {
     pub span: Span,
     pub name: Name,
     pub generics: Vec<Name>,
-    pub preds: Vec<Trait>,
     pub fields: Vec<(Name, Type)>,
 }
 
@@ -154,8 +161,28 @@ pub struct StmtEnum {
     pub span: Span,
     pub name: Name,
     pub generics: Vec<Name>,
-    pub preds: Vec<Trait>,
-    pub variants: Vec<(Name, Type)>,
+    pub variants: Vec<Variant>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Variant {
+    pub span: Span,
+    pub name: Name,
+    pub ty: Type,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct StmtType {
+    pub span: Span,
+    pub name: Name,
+    pub generics: Vec<Name>,
+    pub ty: Type,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Index {
+    pub span: Span,
+    pub index: usize,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -169,12 +196,19 @@ pub enum Expr {
     Tuple(Span, Type, Vec<Expr>),
     Enum(Span, Type, Name, Name, Box<Expr>),
     Field(Span, Type, Box<Expr>, Name),
-    Var(Span, Type, Name),
+    Index(Span, Type, Box<Expr>, Index),
+    Var(Span, Type, Name, Vec<Type>),
     Call(Span, Type, Box<Expr>, Vec<Expr>),
     Block(Span, Type, Vec<Stmt>, Box<Expr>),
     From(Span, Type, Name, Box<Expr>, Box<Query>),
-    Assoc(Span, Type, Trait, Name),
+    Assoc(Span, Type, Trait, Name, Vec<Type>),
     Err(Span, Type),
+    Array(Span, Type, Vec<Expr>),
+    Assign(Span, Type, Box<Expr>, Box<Expr>),
+    Return(Span, Type, Box<Expr>),
+    Continue(Span, Type),
+    Break(Span, Type),
+    Fun(Span, Type, Vec<Param>, Type, Box<Expr>),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -220,21 +254,48 @@ impl StmtImpl {
     }
 }
 
-impl Param {
-    pub fn new(span: Span, name: impl Into<Name>, ty: Type) -> Param {
-        Param {
+impl StmtType {
+    pub fn new(span: Span, name: Name, generics: Vec<Name>, ty: Type) -> StmtType {
+        StmtType {
             span,
-            name: name.into(),
+            name,
+            generics,
             ty,
         }
     }
 }
 
+impl StmtTrait {
+    pub fn new(
+        span: Span,
+        name: Name,
+        generics: Vec<Name>,
+        body: Vec<Trait>,
+        defs: Vec<StmtDef>,
+        assocs: Vec<(Name, Type)>,
+    ) -> StmtTrait {
+        StmtTrait {
+            span,
+            name,
+            generics,
+            body,
+            defs,
+            assocs,
+        }
+    }
+}
+
+impl Param {
+    pub fn new(span: Span, name: Name, ty: Type) -> Param {
+        Param { span, name, ty }
+    }
+}
+
 impl StmtVar {
-    pub fn new(span: Span, name: impl Into<Name>, ty: Type, expr: Expr) -> StmtVar {
+    pub fn new(span: Span, name: Name, ty: Type, expr: Expr) -> StmtVar {
         StmtVar {
             span,
-            name: name.into(),
+            name,
             ty,
             expr,
         }
@@ -244,7 +305,7 @@ impl StmtVar {
 impl StmtDef {
     pub fn new(
         span: Span,
-        name: impl Into<Name>,
+        name: Name,
         generics: Vec<Name>,
         preds: Vec<Trait>,
         params: Vec<Param>,
@@ -253,7 +314,7 @@ impl StmtDef {
     ) -> StmtDef {
         StmtDef {
             span,
-            name: name.into(),
+            name,
             generics,
             preds,
             params,
@@ -266,16 +327,14 @@ impl StmtDef {
 impl StmtStruct {
     pub fn new(
         span: Span,
-        name: impl Into<Name>,
+        name: Name,
         generics: Vec<Name>,
-        preds: Vec<Trait>,
         fields: Vec<(Name, Type)>,
     ) -> StmtStruct {
         StmtStruct {
             span,
-            name: name.into(),
+            name,
             generics,
-            preds,
             fields,
         }
     }
@@ -284,34 +343,33 @@ impl StmtStruct {
 impl StmtEnum {
     pub fn new(
         span: Span,
-        name: impl Into<Name>,
+        name: Name,
         generics: Vec<Name>,
-        preds: Vec<Trait>,
-        variants: Vec<(Name, Type)>,
+        variants: Vec<Variant>,
     ) -> StmtEnum {
         StmtEnum {
             span,
-            name: name.into(),
+            name,
             generics,
-            preds,
             variants,
         }
     }
 }
 
 impl Trait {
-    pub fn new(
-        span: Span,
-        name: impl Into<Name>,
-        types: Vec<Type>,
-        assocs: Vec<(Name, Type)>,
-    ) -> Trait {
+    pub fn new(span: Span, name: Name, types: Vec<Type>, assocs: Vec<(Name, Type)>) -> Trait {
         Trait {
             span,
-            name: name.into(),
+            name,
             types,
             assocs,
         }
+    }
+}
+
+impl Variant {
+    pub fn new(span: Span, name: Name, ty: Type) -> Variant {
+        Variant { span, name, ty }
     }
 }
 
@@ -376,7 +434,7 @@ impl Expr {
             Expr::Bool(s, _, v) => Expr::Bool(s, t, v),
             Expr::String(s, _, v) => Expr::String(s, t, v),
             Expr::Unit(s, _) => Expr::Unit(s, t),
-            Expr::Var(s, _, x) => Expr::Var(s, t, x),
+            Expr::Var(s, _, x, ts) => Expr::Var(s, t, x, ts),
             Expr::Call(s, _, e, es) => Expr::Call(s, t, e, es),
             Expr::Block(s, _, ss, e) => Expr::Block(s, t, ss, e),
             Expr::From(..) => todo!(),
@@ -384,8 +442,15 @@ impl Expr {
             Expr::Enum(_s, _, _, _, _) => todo!(),
             Expr::Field(_s, _, _, _) => todo!(),
             Expr::Tuple(_s, _, _) => todo!(),
-            Expr::Assoc(_s, _, _, _) => todo!(),
+            Expr::Assoc(_s, _, _, _, _) => todo!(),
             Expr::Err(s, _) => Expr::Err(s, t),
+            Expr::Index(_, _, _, _) => todo!(),
+            Expr::Array(_, _, _) => todo!(),
+            Expr::Assign(_, _, _, _) => todo!(),
+            Expr::Return(_, _, _) => todo!(),
+            Expr::Continue(_, _) => todo!(),
+            Expr::Break(_, _) => todo!(),
+            Expr::Fun(_, _, _, _, _) => todo!(),
         }
     }
 }
@@ -406,8 +471,15 @@ impl Expr {
             Expr::Block(_, t, ..) => t,
             Expr::From(_, t, ..) => t,
             Expr::Field(_, t, ..) => t,
-            Expr::Assoc(_, t, _, _) => t,
+            Expr::Assoc(_, t, _, _, _) => t,
             Expr::Err(_, t) => t,
+            Expr::Index(_, _, _, _) => todo!(),
+            Expr::Array(_, _, _) => todo!(),
+            Expr::Assign(_, _, _, _) => todo!(),
+            Expr::Return(_, _, _) => todo!(),
+            Expr::Continue(_, _) => todo!(),
+            Expr::Break(_, _) => todo!(),
+            Expr::Fun(_, _, _, _, _) => todo!(),
         }
     }
 }
@@ -430,6 +502,13 @@ impl Expr {
             Expr::From(s, ..) => *s,
             Expr::Assoc(s, ..) => *s,
             Expr::Err(s, _) => *s,
+            Expr::Index(_, _, _, _) => todo!(),
+            Expr::Array(_, _, _) => todo!(),
+            Expr::Assign(_, _, _, _) => todo!(),
+            Expr::Return(_, _, _) => todo!(),
+            Expr::Continue(_, _) => todo!(),
+            Expr::Break(_, _) => todo!(),
+            Expr::Fun(_, _, _, _, _) => todo!(),
         }
     }
 }

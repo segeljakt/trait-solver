@@ -113,11 +113,11 @@ fn test_lexer_punct0() {
     let mut lexer = Lexer::new(0, "= == != < <= > >= + - * / . .. , : ; ? _ => @ ::");
     assert_eq!(lexer.next(), Some((Span::new(0, 0..1), Token::Eq)));
     assert_eq!(lexer.next(), Some((Span::new(0, 2..4), Token::EqEq)));
-    assert_eq!(lexer.next(), Some((Span::new(0, 5..7), Token::BangEq)));
-    assert_eq!(lexer.next(), Some((Span::new(0, 8..9), Token::LAngle)));
-    assert_eq!(lexer.next(), Some((Span::new(0, 10..12), Token::LAngleEq)));
-    assert_eq!(lexer.next(), Some((Span::new(0, 13..14), Token::RAngle)));
-    assert_eq!(lexer.next(), Some((Span::new(0, 15..17), Token::RAngleEq)));
+    assert_eq!(lexer.next(), Some((Span::new(0, 5..7), Token::NotEq)));
+    assert_eq!(lexer.next(), Some((Span::new(0, 8..9), Token::Lt)));
+    assert_eq!(lexer.next(), Some((Span::new(0, 10..12), Token::Le)));
+    assert_eq!(lexer.next(), Some((Span::new(0, 13..14), Token::Gt)));
+    assert_eq!(lexer.next(), Some((Span::new(0, 15..17), Token::Ge)));
     assert_eq!(lexer.next(), Some((Span::new(0, 18..19), Token::Plus)));
     assert_eq!(lexer.next(), Some((Span::new(0, 20..21), Token::Minus)));
     assert_eq!(lexer.next(), Some((Span::new(0, 22..23), Token::Star)));
@@ -256,6 +256,27 @@ fn test_lexer_code1() {
 }
 
 #[test]
+fn test_lexer_code2() {
+    let mut lexer = Lexer::new(0, "-- -");
+    assert_eq!(lexer.next(), Some((Span::new(0, 0..1), Token::Minus)));
+    assert_eq!(lexer.next(), Some((Span::new(0, 1..2), Token::Minus)));
+    assert_eq!(lexer.next(), Some((Span::new(0, 3..4), Token::Minus)));
+    assert_eq!(lexer.next(), Some((Span::new(0, 4..4), Token::Eof)));
+    assert_eq!(lexer.next(), None);
+}
+
+#[test]
+fn test_lexer_code3() {
+    let mut lexer = Lexer::new(0, "--- -- - ---");
+    assert_eq!(
+        lexer.next(),
+        Some((Span::new(0, 0..12), Token::Code(" -- - ")))
+    );
+    assert_eq!(lexer.next(), Some((Span::new(0, 12..12), Token::Eof)));
+    assert_eq!(lexer.next(), None);
+}
+
+#[test]
 fn test_lexer_comments0() {
     let mut lexer = Lexer::new(0, "1 # + 2");
     assert_eq!(lexer.next(), Some((Span::new(0, 0..1), Token::Int("1"))));
@@ -303,8 +324,8 @@ fn test_lexer_err1() {
 fn test_lexer_unused0() {
     let mut lexer = Lexer::new(0, "-> <- ..=");
     assert_eq!(lexer.next(), Some((Span::new(0, 0..1), Token::Minus)));
-    assert_eq!(lexer.next(), Some((Span::new(0, 1..2), Token::RAngle)));
-    assert_eq!(lexer.next(), Some((Span::new(0, 3..4), Token::LAngle)));
+    assert_eq!(lexer.next(), Some((Span::new(0, 1..2), Token::Gt)));
+    assert_eq!(lexer.next(), Some((Span::new(0, 3..4), Token::Lt)));
     assert_eq!(lexer.next(), Some((Span::new(0, 4..5), Token::Minus)));
     assert_eq!(lexer.next(), Some((Span::new(0, 6..8), Token::DotDot)));
     assert_eq!(lexer.next(), Some((Span::new(0, 8..9), Token::Eq)));

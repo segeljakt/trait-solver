@@ -19,25 +19,14 @@ impl Program {
 impl Stmt {
     pub fn apply(&self, sub: &[(Name, Type)]) -> Stmt {
         match self {
-            Stmt::Var(v) => {
-                let v = v.apply(sub);
-                Stmt::Var(v)
-            }
-            Stmt::Def(d) => {
-                let d = d.apply(sub);
-                Stmt::Def(d)
-            }
-            Stmt::Impl(i) => {
-                let i = i.apply(sub);
-                // let ds = ds.iter().map(|d| d.apply(sub)).collect();
-                Stmt::Impl(i)
-            }
-            Stmt::Expr(e) => {
-                let e = e.apply(sub);
-                Stmt::Expr(e)
-            }
-            Stmt::Struct(_) => todo!(),
-            Stmt::Enum(_) => todo!(),
+            Stmt::Var(v) => Stmt::Var(v.apply(sub)),
+            Stmt::Def(d) => Stmt::Def(d.apply(sub)),
+            Stmt::Impl(i) => Stmt::Impl(i.apply(sub)),
+            Stmt::Expr(e) => Stmt::Expr(e.apply(sub)),
+            Stmt::Struct(s) => Stmt::Struct(s.clone()),
+            Stmt::Enum(s) => Stmt::Enum(s.clone()),
+            Stmt::Type(s) => Stmt::Type(s.clone()),
+            Stmt::Trait(s) => Stmt::Trait(s.clone()),
         }
     }
 }
@@ -142,10 +131,11 @@ impl Expr {
                 let t = t.apply(sub);
                 Expr::Unit(*s, t)
             }
-            Expr::Var(s, t, x) => {
+            Expr::Var(s, t, x, ts) => {
                 let t = t.apply(sub);
                 let x = x.clone();
-                Expr::Var(*s, t, x)
+                let ts = ts.into_iter().map(|t| t.apply(sub)).collect();
+                Expr::Var(*s, t, x, ts)
             }
             Expr::Call(s, t, e, es) => {
                 let t = t.apply(sub);
@@ -164,11 +154,18 @@ impl Expr {
             Expr::Enum(_, _, _, _, _) => todo!(),
             Expr::Field(_, _, _, _) => todo!(),
             Expr::Tuple(_, _, _) => todo!(),
-            Expr::Assoc(_, _, _, _) => todo!(),
+            Expr::Assoc(_, _, _, _, _) => todo!(),
+            Expr::Index(_, _, _, _) => todo!(),
+            Expr::Array(_, _, _) => todo!(),
             Expr::Err(s, t) => {
                 let t = t.apply(sub);
                 Expr::Err(*s, t)
             }
+            Expr::Assign(_, _, _, _) => todo!(),
+            Expr::Return(_, _, _) => todo!(),
+            Expr::Continue(_, _) => todo!(),
+            Expr::Break(_, _) => todo!(),
+            Expr::Fun(_, _, _, _, _) => todo!(),
         }
     }
 }

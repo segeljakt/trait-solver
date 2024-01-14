@@ -80,12 +80,16 @@ impl ariadne::Span for Span {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Diags(pub Vec<ariadne::Report<'static, Span>>);
 
 impl Diags {
     pub fn new() -> Self {
         Self(Vec::new())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     pub fn err(&mut self, span: Span, label: impl AsRef<str>, msg: impl AsRef<str>) {

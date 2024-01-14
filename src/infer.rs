@@ -134,15 +134,14 @@ impl Stmt {
         ctx: &mut Context,
     ) -> Stmt {
         match self {
-            Stmt::Var(v) => Stmt::Var(v.infer(sub, goals, ctx)),
-            Stmt::Def(d) => Stmt::Def(d.infer(ctx)),
-            Stmt::Impl(i) => Stmt::Impl(i.infer(ctx)),
-            Stmt::Expr(e) => {
-                let e = e.infer(sub, goals, ctx);
-                Stmt::Expr(e)
-            }
-            Stmt::Struct(_) => todo!(),
-            Stmt::Enum(_) => todo!(),
+            Stmt::Var(s) => Stmt::Var(s.infer(sub, goals, ctx)),
+            Stmt::Def(s) => Stmt::Def(s.infer(ctx)),
+            Stmt::Impl(s) => Stmt::Impl(s.infer(ctx)),
+            Stmt::Expr(s) => Stmt::Expr(s.infer(sub, goals, ctx)),
+            Stmt::Struct(s) => Stmt::Struct(s.clone()),
+            Stmt::Enum(s) => Stmt::Enum(s.clone()),
+            Stmt::Type(s) => Stmt::Type(s.clone()),
+            Stmt::Trait(s) => Stmt::Trait(s.clone()),
         }
     }
 }
@@ -254,10 +253,10 @@ impl Expr {
             Expr::Tuple(_, _t0, _xes) => {
                 todo!()
             }
-            Expr::Var(_, t0, x) => match ctx.get(&x).unwrap().clone() {
+            Expr::Var(_, t0, x, ts0) => match ctx.get(&x).unwrap().clone() {
                 Binding::Var(s1, t1) => {
                     ctx.recover(s, s1, unify(sub, &t0, &t1));
-                    Expr::Var(s, t0.clone(), x.clone())
+                    Expr::Var(s, t0.clone(), x.clone(), ts0.clone())
                 }
                 Binding::Def(s1, gs, preds, ts, t1) => {
                     let gsub = gs
@@ -273,7 +272,7 @@ impl Expr {
                     ts.push(t1);
                     let t2 = Type::Cons(Name::from("fun"), ts);
                     ctx.recover(s, s1, unify(sub, &t0, &t2));
-                    Expr::Var(s, t0.clone(), x.clone())
+                    Expr::Var(s, t0.clone(), x.clone(), ts0.clone())
                 }
                 Binding::Impl(_, _) => todo!(),
             },
@@ -299,7 +298,14 @@ impl Expr {
             Expr::From(..) => todo!(),
             Expr::Field(..) => todo!(),
             Expr::Assoc(..) => todo!(),
+            Expr::Index(_, _, _, _) => todo!(),
+            Expr::Array(_, _, _) => todo!(),
             Expr::Err(s, t) => Expr::Err(*s, t.clone()),
+            Expr::Assign(_, _, _, _) => todo!(),
+            Expr::Return(_, _, _) => todo!(),
+            Expr::Continue(_, _) => todo!(),
+            Expr::Break(_, _) => todo!(),
+            Expr::Fun(_, _, _, _, _) => todo!(),
         }
     }
 }

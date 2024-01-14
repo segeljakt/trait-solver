@@ -6,9 +6,12 @@ use crate::ast::StmtDef;
 use crate::ast::StmtEnum;
 use crate::ast::StmtImpl;
 use crate::ast::StmtStruct;
+use crate::ast::StmtTrait;
+use crate::ast::StmtType;
 use crate::ast::StmtVar;
 use crate::ast::Trait;
 use crate::ast::Type;
+use crate::ast::Variant;
 use crate::infer::Context;
 
 // Replace all holes with fresh type variables.
@@ -69,6 +72,14 @@ impl Stmt {
                 let e = e.annotate(ctx);
                 Stmt::Enum(e)
             }
+            Stmt::Type(s) => {
+                let s = s.annotate(ctx);
+                Stmt::Type(s)
+            }
+            Stmt::Trait(s) => {
+                let s = s.annotate(ctx);
+                Stmt::Trait(s)
+            }
         }
     }
 }
@@ -78,13 +89,22 @@ impl StmtStruct {
         let span = self.span;
         let name = self.name.clone();
         let generics = self.generics.clone();
-        let preds = self.preds.iter().map(|p| p.annotate(ctx)).collect();
         let fields = self
             .fields
             .iter()
             .map(|(x, t)| (x.clone(), t.annotate(ctx)))
             .collect();
-        StmtStruct::new(span, name, generics, preds, fields)
+        StmtStruct::new(span, name, generics, fields)
+    }
+}
+
+impl StmtType {
+    pub fn annotate(&self, ctx: &mut Context) -> StmtType {
+        let span = self.span;
+        let name = self.name.clone();
+        let generics = self.generics.clone();
+        let ty = self.ty.annotate(ctx);
+        StmtType::new(span, name, generics, ty)
     }
 }
 
@@ -93,13 +113,17 @@ impl StmtEnum {
         let span = self.span;
         let name = self.name.clone();
         let generics = self.generics.clone();
-        let preds = self.preds.iter().map(|p| p.annotate(ctx)).collect();
-        let variants = self
-            .variants
-            .iter()
-            .map(|(x, t)| (x.clone(), t.annotate(ctx)))
-            .collect();
-        StmtEnum::new(span, name, generics, preds, variants)
+        let variants = self.variants.iter().map(|v| v.annotate(ctx)).collect();
+        StmtEnum::new(span, name, generics, variants)
+    }
+}
+
+impl Variant {
+    pub fn annotate(&self, ctx: &mut Context) -> Variant {
+        let span = self.span;
+        let name = self.name.clone();
+        let ty = self.ty.annotate(ctx);
+        Variant::new(span, name, ty)
     }
 }
 
@@ -137,6 +161,22 @@ impl StmtImpl {
     }
 }
 
+impl StmtTrait {
+    fn annotate(&self, ctx: &mut Context) -> StmtTrait {
+        let span = self.span;
+        let generics = self.generics.clone();
+        let name = self.name.clone();
+        let body = self.body.iter().map(|p| p.annotate(ctx)).collect();
+        let defs = self.defs.iter().map(|d| d.annotate(ctx)).collect();
+        let assocs = self
+            .assocs
+            .iter()
+            .map(|(x, t)| (x.clone(), t.annotate(ctx)))
+            .collect();
+        StmtTrait::new(span, name, generics, body, defs, assocs)
+    }
+}
+
 impl Expr {
     pub fn annotate(&self, ctx: &mut Context) -> Expr {
         match self {
@@ -163,10 +203,11 @@ impl Expr {
                 let t = t.annotate(ctx);
                 Expr::Unit(*s, t)
             }
-            Expr::Var(s, t, x) => {
+            Expr::Var(s, t, x, ts) => {
                 let t = t.annotate(ctx);
                 let x = x.clone();
-                Expr::Var(*s, t, x)
+                let ts = ts.into_iter().map(|t| t.annotate(ctx)).collect();
+                Expr::Var(*s, t, x, ts)
             }
             Expr::Call(s, t, e, es) => {
                 let t = t.annotate(ctx);
@@ -191,10 +232,17 @@ impl Expr {
             }
             Expr::Tuple(..) => todo!(),
             Expr::Assoc(..) => todo!(),
+            Expr::Index(_, _, _, _) => todo!(),
+            Expr::Array(_, _, _) => todo!(),
             Expr::Err(s, t) => {
                 let t = t.annotate(ctx);
                 Expr::Err(*s, t)
             }
+            Expr::Assign(_, _, _, _) => todo!(),
+            Expr::Return(_, _, _) => todo!(),
+            Expr::Continue(_, _) => todo!(),
+            Expr::Break(_, _) => todo!(),
+            Expr::Fun(_, _, _, _, _) => todo!(),
         }
     }
 }

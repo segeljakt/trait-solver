@@ -5,12 +5,12 @@ pub enum Token<'a> {
     // Punctuations
     Eq,
     EqEq,
-    Bang,
-    BangEq,
-    LAngle,
-    LAngleEq,
-    RAngle,
-    RAngleEq,
+    Not,
+    NotEq,
+    Lt,
+    Le,
+    Gt,
+    Ge,
     Plus,
     Minus,
     Star,
@@ -78,12 +78,12 @@ impl<'a> std::fmt::Display for Token<'a> {
         match self {
             Token::Eq => write!(f, "="),
             Token::EqEq => write!(f, "=="),
-            Token::Bang => write!(f, "!"),
-            Token::BangEq => write!(f, "!="),
-            Token::LAngle => write!(f, "<"),
-            Token::LAngleEq => write!(f, "<="),
-            Token::RAngle => write!(f, ">"),
-            Token::RAngleEq => write!(f, ">="),
+            Token::Not => write!(f, "!"),
+            Token::NotEq => write!(f, "!="),
+            Token::Lt => write!(f, "<"),
+            Token::Le => write!(f, "<="),
+            Token::Gt => write!(f, ">"),
+            Token::Ge => write!(f, ">="),
             Token::Plus => write!(f, "+"),
             Token::Minus => write!(f, "-"),
             Token::AtSign => write!(f, "@"),
@@ -230,7 +230,7 @@ pub struct Lexer<'a> {
     input: &'a str,
     pos: usize,
     eof: bool,
-    file: u16,
+    pub file: u16,
     pub diags: Diags,
 }
 
@@ -379,7 +379,12 @@ impl<'a> Lexer<'a> {
                         let l = '\''.len_utf8();
                         Token::Char(&self.input[start + l..self.pos - l])
                     } else {
-                        return None;
+                        self.diags.err(
+                            Span::new(self.file, start as u32..self.pos as u32),
+                            "Unexpected character",
+                            format!("Unexpected character '{c}'"),
+                        );
+                        continue;
                     }
                 }
                 '(' => Token::LParen,
@@ -410,25 +415,25 @@ impl<'a> Lexer<'a> {
                 '!' => {
                     if let Some('=') = chars.next() {
                         self.pos += '='.len_utf8();
-                        Token::BangEq
+                        Token::NotEq
                     } else {
-                        Token::Bang
+                        Token::Not
                     }
                 }
                 '<' => {
                     if let Some('=') = chars.next() {
                         self.pos += '='.len_utf8();
-                        Token::LAngleEq
+                        Token::Le
                     } else {
-                        Token::LAngle
+                        Token::Lt
                     }
                 }
                 '>' => {
                     if let Some('=') = chars.next() {
                         self.pos += '='.len_utf8();
-                        Token::RAngleEq
+                        Token::Ge
                     } else {
-                        Token::RAngle
+                        Token::Gt
                     }
                 }
                 '.' => {
@@ -446,16 +451,18 @@ impl<'a> Lexer<'a> {
                     if let (Some('-'), Some('-')) = (chars.next(), chars.next()) {
                         self.pos += '-'.len_utf8() * 2;
                         loop {
-                            if let Some(c) = chars.next() {
+                            let c = chars.next()?;
+                            self.pos += c.len_utf8();
+                            if c == '-' {
+                                let c = chars.next()?;
                                 self.pos += c.len_utf8();
                                 if c == '-' {
-                                    if let (Some('-'), Some('-')) = (chars.next(), chars.next()) {
-                                        self.pos += '-'.len_utf8() * 2;
+                                    let c = chars.next()?;
+                                    self.pos += c.len_utf8();
+                                    if c == '-' {
                                         break;
                                     }
                                 }
-                            } else {
-                                return None;
                             }
                         }
                         let l = '-'.len_utf8() * 3;

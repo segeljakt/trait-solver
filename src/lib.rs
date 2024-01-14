@@ -8,6 +8,7 @@ pub mod infer;
 pub mod instantiate;
 pub mod lexer;
 pub mod parser;
+pub mod resolve;
 
 use ast::Candidate;
 use ast::Name;

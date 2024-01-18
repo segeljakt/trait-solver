@@ -1,7 +1,3 @@
-
-
-
-
 #[test]
 fn test_source0() {
     let mut sources = aqua::diag::Sources::new();

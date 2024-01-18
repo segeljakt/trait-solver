@@ -9,6 +9,31 @@ fn test_lexer_int0() {
     assert_eq!(lexer.next(), Some((Span::new(0, 0..3), Token::Int("123"))));
     assert_eq!(lexer.next(), Some((Span::new(0, 3..3), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
+}
+
+#[test]
+fn test_lexer_int_suffix0() {
+    let mut lexer = Lexer::new(0, "60s");
+    assert_eq!(
+        lexer.next(),
+        Some((Span::new(0, 0..3), Token::IntSuffix("60", "s")))
+    );
+    assert_eq!(lexer.next(), Some((Span::new(0, 3..3), Token::Eof)));
+    assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
+}
+
+#[test]
+fn test_lexer_int_suffix1() {
+    let mut lexer = Lexer::new(0, "60_foo");
+    assert_eq!(
+        lexer.next(),
+        Some((Span::new(0, 0..6), Token::IntSuffix("60", "_foo")))
+    );
+    assert_eq!(lexer.next(), Some((Span::new(0, 6..6), Token::Eof)));
+    assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -20,6 +45,7 @@ fn test_lexer_float0() {
     );
     assert_eq!(lexer.next(), Some((Span::new(0, 7..7), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -31,6 +57,31 @@ fn test_lexer_float1() {
     );
     assert_eq!(lexer.next(), Some((Span::new(0, 4..4), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
+}
+
+#[test]
+fn test_lexer_float_suffix0() {
+    let mut lexer = Lexer::new(0, "60.0ms");
+    assert_eq!(
+        lexer.next(),
+        Some((Span::new(0, 0..6), Token::FloatSuffix("60.0", "ms")))
+    );
+    assert_eq!(lexer.next(), Some((Span::new(0, 6..6), Token::Eof)));
+    assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
+}
+
+#[test]
+fn test_lexer_float_suffix1() {
+    let mut lexer = Lexer::new(0, "60.0_foo");
+    assert_eq!(
+        lexer.next(),
+        Some((Span::new(0, 0..8), Token::FloatSuffix("60.0", "_foo")))
+    );
+    assert_eq!(lexer.next(), Some((Span::new(0, 8..8), Token::Eof)));
+    assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -39,6 +90,7 @@ fn test_lexer_name0() {
     assert_eq!(lexer.next(), Some((Span::new(0, 0..3), Token::Name("abc"))));
     assert_eq!(lexer.next(), Some((Span::new(0, 3..3), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -54,6 +106,7 @@ fn test_lexer_name1() {
     );
     assert_eq!(lexer.next(), Some((Span::new(0, 14..14), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -67,6 +120,7 @@ fn test_lexer_keywords0() {
     assert_eq!(lexer.next(), Some((Span::new(0, 25..29), Token::Type)));
     assert_eq!(lexer.next(), Some((Span::new(0, 29..29), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -90,6 +144,7 @@ fn test_lexer_keywords1() {
     assert_eq!(lexer.next(), Some((Span::new(0, 64..67), Token::Fun)));
     assert_eq!(lexer.next(), Some((Span::new(0, 67..67), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -106,6 +161,7 @@ fn test_lexer_keywords2() {
     assert_eq!(lexer.next(), Some((Span::new(0, 44..46), Token::On)));
     assert_eq!(lexer.next(), Some((Span::new(0, 46..46), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -132,7 +188,7 @@ fn test_lexer_punct0() {
         lexer.next(),
         Some((Span::new(0, 39..40), Token::Underscore))
     );
-    assert_eq!(lexer.next(), Some((Span::new(0, 41..43), Token::Arrow)));
+    assert_eq!(lexer.next(), Some((Span::new(0, 41..43), Token::FatArrow)));
     assert_eq!(lexer.next(), Some((Span::new(0, 44..45), Token::AtSign)));
     assert_eq!(
         lexer.next(),
@@ -140,6 +196,7 @@ fn test_lexer_punct0() {
     );
     assert_eq!(lexer.next(), Some((Span::new(0, 48..48), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -151,6 +208,7 @@ fn test_lexer_string0() {
     );
     assert_eq!(lexer.next(), Some((Span::new(0, 5..5), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -162,6 +220,7 @@ fn test_lexer_string1() {
     );
     assert_eq!(lexer.next(), Some((Span::new(0, 10..10), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -179,6 +238,7 @@ fn test_lexer_char0() {
     assert_eq!(lexer.next(), Some((Span::new(0, 36..39), Token::Char("j"))));
     assert_eq!(lexer.next(), Some((Span::new(0, 39..39), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -204,6 +264,7 @@ fn test_lexer_char1() {
     );
     assert_eq!(lexer.next(), Some((Span::new(0, 29..29), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -223,6 +284,7 @@ fn test_lexer_separators0() {
     assert_eq!(lexer.next(), Some((Span::new(0, 13..14), Token::RBrace)));
     assert_eq!(lexer.next(), Some((Span::new(0, 14..14), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -234,6 +296,7 @@ fn test_lexer_code0() {
     );
     assert_eq!(lexer.next(), Some((Span::new(0, 20..20), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -253,6 +316,7 @@ fn test_lexer_code1() {
     assert_eq!(lexer.next(), Some((Span::new(0, 33..34), Token::SemiColon)));
     assert_eq!(lexer.next(), Some((Span::new(0, 34..34), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -263,6 +327,7 @@ fn test_lexer_code2() {
     assert_eq!(lexer.next(), Some((Span::new(0, 3..4), Token::Minus)));
     assert_eq!(lexer.next(), Some((Span::new(0, 4..4), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -274,6 +339,7 @@ fn test_lexer_code3() {
     );
     assert_eq!(lexer.next(), Some((Span::new(0, 12..12), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -282,6 +348,7 @@ fn test_lexer_comments0() {
     assert_eq!(lexer.next(), Some((Span::new(0, 0..1), Token::Int("1"))));
     assert_eq!(lexer.next(), Some((Span::new(0, 7..7), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -291,11 +358,12 @@ fn test_lexer_comments1() {
     assert_eq!(lexer.next(), Some((Span::new(0, 8..9), Token::Int("3"))));
     assert_eq!(lexer.next(), Some((Span::new(0, 9..9), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
 fn test_lexer_err0() {
-    let mut lexer = Lexer::new(0, "\\ % ^ & | ~ ` $");
+    let mut lexer = Lexer::new(0, "\\ % ^ & ~ ` $");
     assert_eq!(lexer.next(), Some((Span::new(0, 0..1), Token::Err)));
     assert_eq!(lexer.next(), Some((Span::new(0, 2..3), Token::Err)));
     assert_eq!(lexer.next(), Some((Span::new(0, 4..5), Token::Err)));
@@ -303,9 +371,9 @@ fn test_lexer_err0() {
     assert_eq!(lexer.next(), Some((Span::new(0, 8..9), Token::Err)));
     assert_eq!(lexer.next(), Some((Span::new(0, 10..11), Token::Err)));
     assert_eq!(lexer.next(), Some((Span::new(0, 12..13), Token::Err)));
-    assert_eq!(lexer.next(), Some((Span::new(0, 14..15), Token::Err)));
-    assert_eq!(lexer.next(), Some((Span::new(0, 15..15), Token::Eof)));
+    assert_eq!(lexer.next(), Some((Span::new(0, 13..13), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert!(!lexer.report.is_empty());
 }
 
 #[test]
@@ -317,7 +385,7 @@ fn test_lexer_err1() {
     assert_eq!(lexer.next(), Some((Span::new(0, 0..1), Token::Err)));
     assert_eq!(lexer.next(), Some((Span::new(0, 1..1), Token::Eof)));
     assert_eq!(lexer.next(), None);
-    assert_eq!(lexer.diags.string(&mut sources).unwrap(), "Error: Unexpected character\n   ╭─[file:1:1]\n   │\n 1 │ %\n   │ ┬  \n   │ ╰── Unexpected character '%'\n───╯\n\n");
+    assert_eq!(lexer.report.string(&mut sources).unwrap(), "Error: Unexpected character\n   ╭─[file:1:1]\n   │\n 1 │ %\n   │ ┬  \n   │ ╰── Unexpected character '%'\n───╯\n\n");
 }
 
 #[test]
@@ -331,6 +399,7 @@ fn test_lexer_unused0() {
     assert_eq!(lexer.next(), Some((Span::new(0, 8..9), Token::Eq)));
     assert_eq!(lexer.next(), Some((Span::new(0, 9..9), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -338,6 +407,7 @@ fn test_lexer_eof0() {
     let mut lexer = Lexer::new(0, "");
     assert_eq!(lexer.next(), Some((Span::new(0, 0..0), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }
 
 #[test]
@@ -345,4 +415,5 @@ fn test_lexer_eof1() {
     let mut lexer = Lexer::new(0, " ");
     assert_eq!(lexer.next(), Some((Span::new(0, 1..1), Token::Eof)));
     assert_eq!(lexer.next(), None);
+    assert_eq!(lexer.report.is_empty(), true);
 }

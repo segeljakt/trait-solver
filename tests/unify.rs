@@ -1,10 +1,8 @@
-mod util;
-
 use aqua::ast::Type;
-use aqua::unify;
+use aqua::solver::unify;
 
-use crate::util::t;
-use crate::util::tc;
+use aqua::util::t;
+use aqua::util::tc;
 
 #[test]
 fn test_unify_atom0() {

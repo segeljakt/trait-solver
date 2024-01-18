@@ -1,9 +1,11 @@
+use smol_str::SmolStr;
+
 use crate::lexer::Span;
 
 #[derive(Debug, Clone)]
 pub struct Name {
     pub span: Span,
-    pub data: String,
+    pub data: SmolStr,
 }
 
 impl Eq for Name {}
@@ -17,7 +19,7 @@ impl From<&str> for Name {
     fn from(s: &str) -> Name {
         Name {
             span: Span::default(),
-            data: s.to_string(),
+            data: SmolStr::from(s),
         }
     }
 }
@@ -26,13 +28,13 @@ impl From<String> for Name {
     fn from(s: String) -> Name {
         Name {
             span: Span::default(),
-            data: s,
+            data: SmolStr::from(s),
         }
     }
 }
 
 impl Name {
-    pub fn new(span: Span, data: impl Into<String>) -> Name {
+    pub fn new(span: Span, data: impl Into<SmolStr>) -> Name {
         Name {
             span,
             data: data.into(),
@@ -42,7 +44,7 @@ impl Name {
 
 impl Index {
     pub fn new(span: Span, index: usize) -> Index {
-        Index { span, index }
+        Index { span, data: index }
     }
 }
 
@@ -60,15 +62,16 @@ pub struct StmtImpl {
     pub span: Span,
     pub generics: Vec<Name>,
     pub head: Trait,
-    pub body: Vec<Trait>,
+    pub where_clause: Vec<Trait>,
     pub defs: Vec<StmtDef>,
+    pub types: Vec<StmtType>,
 }
 
 impl PartialEq for StmtImpl {
     fn eq(&self, other: &Self) -> bool {
         self.generics == other.generics
             && self.head == other.head
-            && self.body == other.body
+            && self.where_clause == other.where_clause
             && self.defs == other.defs
     }
 }
@@ -79,8 +82,8 @@ pub struct StmtTrait {
     pub name: Name,
     pub generics: Vec<Name>,
     pub body: Vec<Trait>,
-    pub defs: Vec<StmtDef>,
-    pub assocs: Vec<(Name, Type)>,
+    pub defs: Vec<StmtDefDecl>,
+    pub types: Vec<StmtTypeDecl>,
 }
 
 // A trait is like a predicate
@@ -100,7 +103,12 @@ pub enum Type {
     Cons(Name, Vec<Type>),
     Assoc(Trait, Name),
     Var(Name),
+    Gen(Name),
+    Fun(Vec<Type>, Box<Type>),
+    Tuple(Vec<Type>),
+    Record(Vec<(Name, Type)>),
     Hole,
+    Err,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -130,6 +138,23 @@ pub enum Stmt {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub struct StmtTypeDecl {
+    pub span: Span,
+    pub name: Name,
+    pub generics: Vec<Name>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct StmtDefDecl {
+    pub span: Span,
+    pub name: Name,
+    pub generics: Vec<Name>,
+    pub where_clause: Vec<Trait>,
+    pub params: Vec<Param>,
+    pub ty: Type,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StmtVar {
     pub span: Span,
     pub name: Name,
@@ -142,7 +167,7 @@ pub struct StmtDef {
     pub span: Span,
     pub name: Name,
     pub generics: Vec<Name>,
-    pub preds: Vec<Trait>,
+    pub where_clause: Vec<Trait>,
     pub params: Vec<Param>,
     pub ty: Type,
     pub expr: Expr,
@@ -161,14 +186,7 @@ pub struct StmtEnum {
     pub span: Span,
     pub name: Name,
     pub generics: Vec<Name>,
-    pub variants: Vec<Variant>,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Variant {
-    pub span: Span,
-    pub name: Name,
-    pub ty: Type,
+    pub variants: Vec<(Name, Type)>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -182,7 +200,7 @@ pub struct StmtType {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Index {
     pub span: Span,
-    pub index: usize,
+    pub data: usize,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -191,43 +209,68 @@ pub enum Expr {
     Float(Span, Type, String),
     Bool(Span, Type, bool),
     String(Span, Type, String),
-    Unit(Span, Type),
-    Struct(Span, Type, Name, Vec<(Name, Expr)>),
+    Struct(Span, Type, Name, Vec<Type>, Vec<(Name, Expr)>),
     Tuple(Span, Type, Vec<Expr>),
-    Enum(Span, Type, Name, Name, Box<Expr>),
+    Record(Span, Type, Vec<(Name, Expr)>),
+    Enum(Span, Type, Name, Vec<Type>, Name, Box<Expr>),
     Field(Span, Type, Box<Expr>, Name),
     Index(Span, Type, Box<Expr>, Index),
     Var(Span, Type, Name, Vec<Type>),
     Call(Span, Type, Box<Expr>, Vec<Expr>),
     Block(Span, Type, Vec<Stmt>, Box<Expr>),
-    From(Span, Type, Name, Box<Expr>, Box<Query>),
+    Query(Span, Type, Vec<Query>),
     Assoc(Span, Type, Trait, Name, Vec<Type>),
-    Err(Span, Type),
+    Match(Span, Type, Box<Expr>, Vec<(Pat, Expr)>),
     Array(Span, Type, Vec<Expr>),
     Assign(Span, Type, Box<Expr>, Box<Expr>),
     Return(Span, Type, Box<Expr>),
     Continue(Span, Type),
     Break(Span, Type),
+    While(Span, Type, Box<Expr>, Box<Expr>),
     Fun(Span, Type, Vec<Param>, Type, Box<Expr>),
+    And(Span, Type, Box<Expr>, Box<Expr>),
+    Or(Span, Type, Box<Expr>, Box<Expr>),
+    Err(Span, Type),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Arm {
+    pub span: Span,
+    pub pat: Pat,
+    pub expr: Expr,
+}
+
+impl Arm {
+    pub fn new(span: Span, pat: Pat, expr: Expr) -> Arm {
+        Arm { span, pat, expr }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum Pat {
+    Var(Span, Type, Name),
+    Tuple(Span, Type, Vec<Pat>),
+    Struct(Span, Type, Name, Vec<Type>, Vec<(Name, Pat)>),
+    Enum(Span, Type, Name, Vec<Type>, Name, Box<Pat>),
+    Int(Span, Type, String),
+    String(Span, Type, String),
+    Wildcard(Span, Type),
+    Bool(Span, Type, bool),
+    Err(Span, Type),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Query {
-    From(Span, Name, Box<Expr>, Box<Query>),
-    Where(Span, WhereExpr, Box<Query>),
-    Select(Span, Vec<Expr>, Box<Query>),
-    Into(Span, Name, Box<Expr>),
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum WhereExpr {
-    And(Span, Box<WhereExpr>, Box<WhereExpr>),
-    Or(Span, Box<WhereExpr>, Box<WhereExpr>),
-    Not(Span, Box<WhereExpr>),
-    Lt(Span, Expr, Expr),
-    Leq(Span, Expr, Expr),
-    Var(Span, Name),
-    Call(Span, Expr, Vec<Expr>),
+    From(Span, Type, Vec<(Name, Expr)>),
+    Where(Span, Type, Box<Expr>),
+    Select(Span, Type, Vec<(Name, Expr)>),
+    Join(Span, Type, Vec<(Name, Expr)>, Box<Expr>),
+    Group(Span, Type, Vec<Name>, Vec<Query>),
+    Over(Span, Type, Box<Expr>, Vec<Query>),
+    Order(Span, Type, Vec<(Name, bool)>),
+    With(Span, Type, Vec<(Name, Expr)>),
+    Into(Span, Type, Vec<Expr>),
+    Compute(Span, Type, Vec<(Name, Expr, Expr)>),
 }
 
 impl Program {
@@ -241,13 +284,15 @@ impl StmtImpl {
         span: Span,
         generics: Vec<Name>,
         head: Trait,
-        body: Vec<Trait>,
+        where_clause: Vec<Trait>,
         defs: Vec<StmtDef>,
+        types: Vec<StmtType>,
     ) -> StmtImpl {
         StmtImpl {
             span,
             generics,
-            body,
+            where_clause,
+            types,
             head,
             defs,
         }
@@ -271,8 +316,8 @@ impl StmtTrait {
         name: Name,
         generics: Vec<Name>,
         body: Vec<Trait>,
-        defs: Vec<StmtDef>,
-        assocs: Vec<(Name, Type)>,
+        defs: Vec<StmtDefDecl>,
+        types: Vec<StmtTypeDecl>,
     ) -> StmtTrait {
         StmtTrait {
             span,
@@ -280,7 +325,17 @@ impl StmtTrait {
             generics,
             body,
             defs,
-            assocs,
+            types,
+        }
+    }
+}
+
+impl StmtTypeDecl {
+    pub fn new(span: Span, name: Name, generics: Vec<Name>) -> Self {
+        Self {
+            span,
+            name,
+            generics,
         }
     }
 }
@@ -316,7 +371,7 @@ impl StmtDef {
             span,
             name,
             generics,
-            preds,
+            where_clause: preds,
             params,
             ty,
             expr,
@@ -345,13 +400,33 @@ impl StmtEnum {
         span: Span,
         name: Name,
         generics: Vec<Name>,
-        variants: Vec<Variant>,
+        variants: Vec<(Name, Type)>,
     ) -> StmtEnum {
         StmtEnum {
             span,
             name,
             generics,
             variants,
+        }
+    }
+}
+
+impl StmtDefDecl {
+    pub fn new(
+        span: Span,
+        name: Name,
+        generics: Vec<Name>,
+        where_clause: Vec<Trait>,
+        params: Vec<Param>,
+        ty: Type,
+    ) -> Self {
+        Self {
+            span,
+            name,
+            generics,
+            where_clause,
+            params,
+            ty,
         }
     }
 }
@@ -364,30 +439,6 @@ impl Trait {
             types,
             assocs,
         }
-    }
-}
-
-impl Variant {
-    pub fn new(span: Span, name: Name, ty: Type) -> Variant {
-        Variant { span, name, ty }
-    }
-}
-
-impl Type {
-    pub fn cons(x: impl Into<Name>, ts: Vec<Type>) -> Type {
-        Type::Cons(x.into(), ts)
-    }
-
-    pub fn var(x: impl Into<Name>) -> Type {
-        Type::Var(x.into())
-    }
-
-    pub fn atom(x: impl Into<Name>) -> Type {
-        Type::Cons(x.into(), Vec::new())
-    }
-
-    pub fn assoc(i: Trait, x: impl Into<Name>) -> Type {
-        Type::Assoc(i, x.into())
     }
 }
 
@@ -426,6 +477,18 @@ impl From<StmtEnum> for Stmt {
     }
 }
 
+impl From<StmtType> for Stmt {
+    fn from(t: StmtType) -> Stmt {
+        Stmt::Type(t)
+    }
+}
+
+impl From<StmtTrait> for Stmt {
+    fn from(t: StmtTrait) -> Stmt {
+        Stmt::Trait(t)
+    }
+}
+
 impl Expr {
     pub fn with(self, t: Type) -> Expr {
         match self {
@@ -433,24 +496,44 @@ impl Expr {
             Expr::Float(s, _, v) => Expr::Float(s, t, v),
             Expr::Bool(s, _, v) => Expr::Bool(s, t, v),
             Expr::String(s, _, v) => Expr::String(s, t, v),
-            Expr::Unit(s, _) => Expr::Unit(s, t),
             Expr::Var(s, _, x, ts) => Expr::Var(s, t, x, ts),
             Expr::Call(s, _, e, es) => Expr::Call(s, t, e, es),
             Expr::Block(s, _, ss, e) => Expr::Block(s, t, ss, e),
-            Expr::From(..) => todo!(),
-            Expr::Struct(_s, _, _, _) => todo!(),
-            Expr::Enum(_s, _, _, _, _) => todo!(),
-            Expr::Field(_s, _, _, _) => todo!(),
-            Expr::Tuple(_s, _, _) => todo!(),
-            Expr::Assoc(_s, _, _, _, _) => todo!(),
+            Expr::Query(s, _, qs) => Expr::Query(s, t, qs),
+            Expr::Struct(s, _, x, ts, xes) => Expr::Struct(s, t, x, ts, xes),
+            Expr::Enum(s, _, x0, ts, x1, e) => Expr::Enum(s, t, x0, ts, x1, e),
+            Expr::Field(s, _, e, x) => Expr::Field(s, t, e, x),
+            Expr::Tuple(s, _, es) => Expr::Tuple(s, t, es),
+            Expr::Assoc(s, _, tr, x, ts) => Expr::Assoc(s, t, tr, x, ts),
+            Expr::Index(s, _, e, i) => Expr::Index(s, t, e, i),
+            Expr::Array(s, _, es) => Expr::Array(s, t, es),
+            Expr::Assign(s, _, e0, e1) => Expr::Assign(s, t, e0, e1),
+            Expr::Return(s, _, e) => Expr::Return(s, t, e),
+            Expr::Continue(s, _) => Expr::Continue(s, t),
+            Expr::Break(s, _) => Expr::Break(s, t),
+            Expr::Fun(s, _, ps, t1, e) => Expr::Fun(s, t, ps, t1, e),
+            Expr::And(s, _, e0, e1) => Expr::And(s, t, e0, e1),
+            Expr::Or(s, _, e0, e1) => Expr::Or(s, t, e0, e1),
+            Expr::Match(s, _, e, pes) => Expr::Match(s, t, e, pes),
             Expr::Err(s, _) => Expr::Err(s, t),
-            Expr::Index(_, _, _, _) => todo!(),
-            Expr::Array(_, _, _) => todo!(),
-            Expr::Assign(_, _, _, _) => todo!(),
-            Expr::Return(_, _, _) => todo!(),
-            Expr::Continue(_, _) => todo!(),
-            Expr::Break(_, _) => todo!(),
-            Expr::Fun(_, _, _, _, _) => todo!(),
+            Expr::While(s, _, e0, e1) => Expr::While(s, t, e0, e1),
+            Expr::Record(_, _, _) => todo!(),
+        }
+    }
+}
+
+impl Pat {
+    pub fn with(self, t: Type) -> Pat {
+        match self {
+            Pat::Var(s, _, x) => Pat::Var(s, t, x),
+            Pat::Tuple(s, _, ps) => Pat::Tuple(s, t, ps),
+            Pat::Struct(s, _, x, ts, xps) => Pat::Struct(s, t, x, ts, xps),
+            Pat::Enum(s, _, x0, ts, x1, p) => Pat::Enum(s, t, x0, ts, x1, p),
+            Pat::Int(s, _, v) => Pat::Int(s, t, v),
+            Pat::String(s, _, v) => Pat::String(s, t, v),
+            Pat::Wildcard(s, _) => Pat::Wildcard(s, t),
+            Pat::Bool(s, _, v) => Pat::Bool(s, t, v),
+            Pat::Err(s, _) => Pat::Err(s, t),
         }
     }
 }
@@ -462,24 +545,44 @@ impl Expr {
             Expr::Float(_, t, ..) => t,
             Expr::Bool(_, t, ..) => t,
             Expr::String(_, t, ..) => t,
-            Expr::Unit(_, t) => t,
             Expr::Struct(_, t, ..) => t,
             Expr::Tuple(_, t, ..) => t,
             Expr::Enum(_, t, ..) => t,
             Expr::Var(_, t, ..) => t,
             Expr::Call(_, t, ..) => t,
             Expr::Block(_, t, ..) => t,
-            Expr::From(_, t, ..) => t,
+            Expr::Query(_, t, ..) => t,
             Expr::Field(_, t, ..) => t,
-            Expr::Assoc(_, t, _, _, _) => t,
+            Expr::Assoc(_, t, ..) => t,
             Expr::Err(_, t) => t,
-            Expr::Index(_, _, _, _) => todo!(),
-            Expr::Array(_, _, _) => todo!(),
-            Expr::Assign(_, _, _, _) => todo!(),
-            Expr::Return(_, _, _) => todo!(),
-            Expr::Continue(_, _) => todo!(),
-            Expr::Break(_, _) => todo!(),
-            Expr::Fun(_, _, _, _, _) => todo!(),
+            Expr::Index(_, t, ..) => t,
+            Expr::Array(_, t, ..) => t,
+            Expr::Assign(_, t, ..) => t,
+            Expr::Return(_, t, ..) => t,
+            Expr::Continue(_, t) => t,
+            Expr::Break(_, t) => t,
+            Expr::Fun(_, t, ..) => t,
+            Expr::And(_, t, ..) => t,
+            Expr::Or(_, t, ..) => t,
+            Expr::Match(_, t, ..) => t,
+            Expr::While(_, t, ..) => t,
+            Expr::Record(_, _, _) => todo!(),
+        }
+    }
+}
+
+impl Pat {
+    pub fn ty(&self) -> &Type {
+        match self {
+            Pat::Var(_, t, ..) => t,
+            Pat::Tuple(_, t, ..) => t,
+            Pat::Struct(_, t, ..) => t,
+            Pat::Enum(_, t, ..) => t,
+            Pat::Int(_, t, ..) => t,
+            Pat::Wildcard(_, t, ..) => t,
+            Pat::String(_, t, ..) => t,
+            Pat::Bool(_, t, ..) => t,
+            Pat::Err(_, t) => t,
         }
     }
 }
@@ -491,7 +594,6 @@ impl Expr {
             Expr::Float(s, ..) => *s,
             Expr::Bool(s, ..) => *s,
             Expr::String(s, ..) => *s,
-            Expr::Unit(s, ..) => *s,
             Expr::Struct(s, ..) => *s,
             Expr::Tuple(s, ..) => *s,
             Expr::Enum(s, ..) => *s,
@@ -499,16 +601,54 @@ impl Expr {
             Expr::Var(s, ..) => *s,
             Expr::Call(s, ..) => *s,
             Expr::Block(s, ..) => *s,
-            Expr::From(s, ..) => *s,
+            Expr::Query(s, ..) => *s,
             Expr::Assoc(s, ..) => *s,
-            Expr::Err(s, _) => *s,
-            Expr::Index(_, _, _, _) => todo!(),
-            Expr::Array(_, _, _) => todo!(),
-            Expr::Assign(_, _, _, _) => todo!(),
-            Expr::Return(_, _, _) => todo!(),
-            Expr::Continue(_, _) => todo!(),
-            Expr::Break(_, _) => todo!(),
-            Expr::Fun(_, _, _, _, _) => todo!(),
+            Expr::Index(s, ..) => *s,
+            Expr::Array(s, ..) => *s,
+            Expr::Assign(s, ..) => *s,
+            Expr::Return(s, ..) => *s,
+            Expr::Continue(s, ..) => *s,
+            Expr::Break(s, ..) => *s,
+            Expr::Fun(s, ..) => *s,
+            Expr::And(s, ..) => *s,
+            Expr::Or(s, ..) => *s,
+            Expr::Match(s, ..) => *s,
+            Expr::Err(s, ..) => *s,
+            Expr::While(s, ..) => *s,
+            Expr::Record(_, _, _) => todo!(),
+        }
+    }
+}
+
+impl Pat {
+    pub fn span(&self) -> Span {
+        match self {
+            Pat::Var(s, ..) => *s,
+            Pat::Tuple(s, ..) => *s,
+            Pat::Struct(s, ..) => *s,
+            Pat::Enum(s, ..) => *s,
+            Pat::Int(s, ..) => *s,
+            Pat::Wildcard(s, ..) => *s,
+            Pat::String(s, ..) => *s,
+            Pat::Bool(s, ..) => *s,
+            Pat::Err(s, _) => *s,
+        }
+    }
+}
+
+impl Query {
+    pub fn span(&self) -> Span {
+        match self {
+            Query::From(s, ..) => *s,
+            Query::Where(s, ..) => *s,
+            Query::Select(s, ..) => *s,
+            Query::Into(s, ..) => *s,
+            Query::Join(s, ..) => *s,
+            Query::Group(s, ..) => *s,
+            Query::Over(s, ..) => *s,
+            Query::Order(s, ..) => *s,
+            Query::With(s, ..) => *s,
+            Query::Compute(s, ..) => *s,
         }
     }
 }

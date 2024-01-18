@@ -1,32 +1,40 @@
-use crate::ast::StmtDef;
 use crate::ast::StmtImpl;
 use crate::infer::Context;
 
-pub fn instantiate_impl(imp: &StmtImpl, ctx: &mut Context) -> StmtImpl {
-    let sub = imp
+pub fn instantiate_impl(s: &StmtImpl, ctx: &mut Context) -> StmtImpl {
+    let sub = s
         .generics
         .iter()
         .map(|q| (q.clone(), ctx.new_tyvar()))
         .collect::<Vec<_>>();
 
-    let head = imp.head.apply(&sub);
-    let body = imp.body.iter().map(|i| i.apply(&sub)).collect::<Vec<_>>();
-    let defs = imp.defs.iter().map(|d| d.apply(&sub)).collect::<Vec<_>>();
-
-    StmtImpl::new(imp.span, vec![], head, body, defs)
-}
-
-pub fn instantiate_def(def: &StmtDef, ctx: &mut Context) -> StmtDef {
-    let sub = def
-        .generics
+    let head = s.head.apply(&sub);
+    let body = s
+        .where_clause
         .iter()
-        .map(|q| (q.clone(), ctx.new_tyvar()))
+        .map(|i| i.apply(&sub))
         .collect::<Vec<_>>();
+    let defs = s.defs.iter().map(|d| d.apply(&sub)).collect::<Vec<_>>();
+    let types = s.types.iter().map(|t| t.apply(&sub)).collect::<Vec<_>>();
 
-    let body = def.preds.iter().map(|p| p.apply(&sub)).collect::<Vec<_>>();
-    let params = def.params.iter().map(|p| p.apply(&sub)).collect::<Vec<_>>();
-    let ty = def.ty.apply(&sub);
-    let expr = def.expr.apply(&sub);
-
-    StmtDef::new(def.span, def.name.clone(), vec![], body, params, ty, expr)
+    StmtImpl::new(s.span, vec![], head, body, defs, types)
 }
+
+// pub fn instantiate_def(s: &StmtDef, ctx: &mut Context) -> StmtDef {
+//     let sub = s
+//         .generics
+//         .iter()
+//         .map(|q| (q.clone(), ctx.new_tyvar()))
+//         .collect::<Vec<_>>();
+//
+//     let body = s
+//         .where_clause
+//         .iter()
+//         .map(|p| p.apply(&sub))
+//         .collect::<Vec<_>>();
+//     let params = s.params.iter().map(|p| p.apply(&sub)).collect::<Vec<_>>();
+//     let ty = s.ty.apply(&sub);
+//     let expr = s.expr.apply(&sub);
+//
+//     StmtDef::new(s.span, s.name.clone(), vec![], body, params, ty, expr)
+// }

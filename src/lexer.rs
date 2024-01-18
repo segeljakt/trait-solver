@@ -1,4 +1,4 @@
-use crate::diag::Diags;
+use crate::diag::Report;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Token<'a> {
@@ -30,12 +30,16 @@ pub enum Token<'a> {
     RBrack,
     Underscore,
     Question,
-    Arrow,
+    FatArrow,
+    Bar,
     // Keywords
     And,
+    As,
     Break,
     Continue,
+    Compute,
     Def,
+    Desc,
     Else,
     Enum,
     False,
@@ -44,12 +48,15 @@ pub enum Token<'a> {
     Group,
     If,
     Impl,
+    Trait,
     In,
     Into,
     Join,
     Match,
+    Of,
     On,
     Or,
+    Order,
     Over,
     Return,
     Select,
@@ -64,7 +71,9 @@ pub enum Token<'a> {
     Code(&'a str),
     Name(&'a str),
     Int(&'a str),
+    IntSuffix(&'a str, &'a str),
     Float(&'a str),
+    FloatSuffix(&'a str, &'a str),
     String(&'a str),
     Char(&'a str),
     // Special
@@ -103,11 +112,13 @@ impl<'a> std::fmt::Display for Token<'a> {
             Token::RBrack => write!(f, "]"),
             Token::Underscore => write!(f, "_"),
             Token::Question => write!(f, "?"),
-            Token::Arrow => write!(f, "=>"),
+            Token::FatArrow => write!(f, "=>"),
+            Token::Bar => write!(f, "|"),
             Token::And => write!(f, "and"),
             Token::Break => write!(f, "break"),
             Token::Continue => write!(f, "continue"),
             Token::Def => write!(f, "def"),
+            Token::Desc => write!(f, "desc"),
             Token::Else => write!(f, "else"),
             Token::Enum => write!(f, "enum"),
             Token::False => write!(f, "false"),
@@ -133,14 +144,21 @@ impl<'a> std::fmt::Display for Token<'a> {
             Token::With => write!(f, "with"),
             Token::Join => write!(f, "join"),
             Token::Fun => write!(f, "fun"),
-            Token::Code(s) => write!(f, "{s}"),
-            Token::Name(s) => write!(f, "{s}"),
-            Token::Int(s) => write!(f, "{s}"),
-            Token::Float(s) => write!(f, "{s}"),
-            Token::String(s) => write!(f, "{s}"),
-            Token::Char(s) => write!(f, "{s}"),
+            Token::Order => write!(f, "order"),
+            Token::Code(v) => write!(f, "{v}"),
+            Token::Name(v) => write!(f, "{v}"),
+            Token::Int(v) => write!(f, "{v}"),
+            Token::IntSuffix(v, s) => write!(f, "{v}{s}"),
+            Token::Float(v) => write!(f, "{v}"),
+            Token::FloatSuffix(v, s) => write!(f, "{v}{s}"),
+            Token::String(v) => write!(f, "{v}"),
+            Token::Char(v) => write!(f, "{v}"),
             Token::Err => write!(f, "<err>"),
             Token::Eof => write!(f, "<eof>"),
+            Token::Of => write!(f, "of"),
+            Token::As => write!(f, "as"),
+            Token::Compute => write!(f, "compute"),
+            Token::Trait => write!(f, "trait"),
         }
     }
 }
@@ -194,21 +212,21 @@ impl Span {
     pub fn file(&self) -> &u16 {
         match self {
             Span::Source(file, _, _) => file,
-            Span::Generated => unreachable!(),
+            Span::Generated => &0,
         }
     }
 
     pub fn start(&self) -> &u32 {
         match self {
             Span::Source(_, start, _) => start,
-            Span::Generated => unreachable!(),
+            Span::Generated => &0,
         }
     }
 
     pub fn end(&self) -> &u32 {
         match self {
             Span::Source(_, _, end) => end,
-            Span::Generated => unreachable!(),
+            Span::Generated => &0,
         }
     }
 }
@@ -231,7 +249,7 @@ pub struct Lexer<'a> {
     pos: usize,
     eof: bool,
     pub file: u16,
-    pub diags: Diags,
+    pub report: Report,
 }
 
 impl<'a> Lexer<'a> {
@@ -241,7 +259,7 @@ impl<'a> Lexer<'a> {
             input,
             eof: false,
             pos: 0,
-            diags: Diags::new(),
+            report: Report::new(),
         }
     }
 
@@ -264,12 +282,8 @@ impl<'a> Lexer<'a> {
                 }
                 ' ' | '\n' | '\t' => continue,
                 'a'..='z' | 'A'..='Z' | '_' => {
-                    while let Some(c1) = chars.next() {
-                        if c1.is_alphanumeric() || c1 == '_' {
-                            self.pos += c1.len_utf8();
-                        } else {
-                            break;
-                        }
+                    while let Some('a'..='z' | 'A'..='Z' | '0'..='9' | '_') = chars.next() {
+                        self.pos += 1;
                     }
                     if self.pos - start == 1 && c == '_' {
                         return Some((
@@ -280,7 +294,9 @@ impl<'a> Lexer<'a> {
 
                     match &self.input[start..self.pos] {
                         "and" => Token::And,
+                        "as" => Token::As,
                         "break" => Token::Break,
+                        "compute" => Token::Compute,
                         "continue" => Token::Continue,
                         "def" => Token::Def,
                         "else" => Token::Else,
@@ -288,15 +304,19 @@ impl<'a> Lexer<'a> {
                         "false" => Token::False,
                         "for" => Token::For,
                         "from" => Token::From,
+                        "fun" => Token::Fun,
                         "group" => Token::Group,
+                        "trait" => Token::Trait,
                         "if" => Token::If,
                         "impl" => Token::Impl,
                         "in" => Token::In,
                         "into" => Token::Into,
                         "join" => Token::Join,
                         "match" => Token::Match,
+                        "of" => Token::Of,
                         "on" => Token::On,
                         "or" => Token::Or,
+                        "order" => Token::Order,
                         "over" => Token::Over,
                         "return" => Token::Return,
                         "select" => Token::Select,
@@ -307,51 +327,68 @@ impl<'a> Lexer<'a> {
                         "where" => Token::Where,
                         "while" => Token::While,
                         "with" => Token::With,
-                        "fun" => Token::Fun,
                         s => Token::Name(s),
                     }
                 }
-                '0'..='9' => {
-                    while let Some(c) = chars.next() {
-                        match c {
-                            c if c.is_numeric() => self.pos += c.len_utf8(),
-                            '.' => match chars.next() {
-                                Some(c) if c.is_alphabetic() => {
-                                    return Some((
-                                        Span::new(self.file, start as u32..self.pos as u32),
-                                        Token::Int(&self.input[start..self.pos]),
-                                    ));
+                '0'..='9' => loop {
+                    match chars.next() {
+                        Some('0'..='9') => self.pos += 1,
+                        Some('.') => match chars.next() {
+                            Some('a'..='z' | 'A'..='Z' | '_') => {
+                                let v = &self.input[start..self.pos];
+                                break Token::Int(v);
+                            }
+                            Some('0'..='9') => {
+                                self.pos += 1;
+                                self.pos += 1;
+                                let mut c = chars.next();
+                                while let Some('0'..='9') = c {
+                                    self.pos += 1;
+                                    c = chars.next();
                                 }
-                                Some(c) if c.is_numeric() => {
-                                    self.pos += '.'.len_utf8();
-                                    self.pos += c.len_utf8();
-                                    while let Some(c) = chars.next() {
-                                        if c.is_numeric() {
-                                            self.pos += c.len_utf8();
-                                        } else {
-                                            break;
-                                        }
+                                let v = &self.input[start..self.pos];
+                                if let Some('a'..='z' | 'A'..='Z' | '_') = c {
+                                    let start = self.pos;
+                                    self.pos += 1;
+                                    while let Some('a'..='z' | 'A'..='Z' | '0'..='9' | '_') =
+                                        chars.next()
+                                    {
+                                        self.pos += 1;
                                     }
-                                    return Some((
-                                        Span::new(self.file, start as u32..self.pos as u32),
-                                        Token::Float(&self.input[start..self.pos]),
-                                    ));
+                                    let s = &self.input[start..self.pos];
+                                    break Token::FloatSuffix(v, s);
+                                } else {
+                                    break Token::Float(v);
                                 }
-                                _ => {
-                                    self.pos += '.'.len_utf8();
-                                    return Some((
-                                        Span::new(self.file, start as u32..self.pos as u32),
-                                        Token::Float(&self.input[start..self.pos]),
-                                    ));
+                            }
+                            _ => {
+                                self.pos += 1;
+                                let v = &self.input[start..self.pos];
+                                break Token::Float(v);
+                            }
+                        },
+                        Some(c) => {
+                            let v = &self.input[start..self.pos];
+                            if let 'a'..='z' | 'A'..='Z' | '_' = c {
+                                let start = self.pos;
+                                self.pos += 1;
+                                while let Some('a'..='z' | 'A'..='Z' | '0'..='9' | '_') =
+                                    chars.next()
+                                {
+                                    self.pos += 1;
                                 }
-                            },
-                            _ => break,
+                                let s = &self.input[start..self.pos];
+                                break Token::IntSuffix(v, s);
+                            } else {
+                                break Token::Int(v);
+                            }
+                        }
+                        None => {
+                            let s = &self.input[start..self.pos];
+                            break Token::Int(s);
                         }
                     }
-
-                    let s = &self.input[start..self.pos];
-                    Token::Int(s)
-                }
+                },
                 '"' => {
                     while let Some(c) = chars.next() {
                         self.pos += c.len_utf8();
@@ -379,7 +416,7 @@ impl<'a> Lexer<'a> {
                         let l = '\''.len_utf8();
                         Token::Char(&self.input[start + l..self.pos - l])
                     } else {
-                        self.diags.err(
+                        self.report.err(
                             Span::new(self.file, start as u32..self.pos as u32),
                             "Unexpected character",
                             format!("Unexpected character '{c}'"),
@@ -400,7 +437,7 @@ impl<'a> Lexer<'a> {
                     }
                     Some('>') => {
                         self.pos += '>'.len_utf8();
-                        Token::Arrow
+                        Token::FatArrow
                     }
                     _ => Token::Eq,
                 },
@@ -447,6 +484,7 @@ impl<'a> Lexer<'a> {
                 ';' => Token::SemiColon,
                 ',' => Token::Comma,
                 '+' => Token::Plus,
+                '|' => Token::Bar,
                 '-' => {
                     if let (Some('-'), Some('-')) = (chars.next(), chars.next()) {
                         self.pos += '-'.len_utf8() * 2;
@@ -476,7 +514,7 @@ impl<'a> Lexer<'a> {
                 '?' => Token::Question,
                 '@' => Token::AtSign,
                 t => {
-                    self.diags.err(
+                    self.report.err(
                         Span::new(self.file, start as u32..self.pos as u32),
                         "Unexpected character",
                         format!("Unexpected character '{t}'"),
@@ -498,10 +536,8 @@ impl<'a> Iterator for Lexer<'a> {
                 return None;
             } else {
                 self.eof = true;
-                Some((
-                    Span::new(self.file, self.pos as u32..self.pos as u32),
-                    Token::Eof,
-                ))
+                let span = Span::new(self.file, self.pos as u32..self.pos as u32);
+                Some((span, Token::Eof))
             }
         })
     }
